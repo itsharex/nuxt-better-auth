@@ -11,7 +11,7 @@ import { generateDrizzleSchema, loadUserAuthConfig } from './schema-generator'
 export interface BetterAuthModuleOptions {}
 
 export default defineNuxtModule<BetterAuthModuleOptions>({
-  meta: { name: 'nuxt-better-auth', configKey: 'auth', compatibility: { nuxt: '>=3.0.0' } },
+  meta: { name: '@onmax/nuxt-better-auth', configKey: 'auth', compatibility: { nuxt: '>=3.0.0' } },
   defaults: {},
   async setup(_options, nuxt) {
     const resolver = createResolver(import.meta.url)
@@ -24,9 +24,9 @@ export default defineNuxtModule<BetterAuthModuleOptions>({
     const clientConfigExists = existsSync(`${clientConfigPath}.ts`) || existsSync(`${clientConfigPath}.js`)
 
     if (!serverConfigExists)
-      throw new Error('[nuxt-better-auth] Missing server/auth.config.ts - create with defineServerAuth()')
+      throw new Error('[@onmax/nuxt-better-auth] Missing server/auth.config.ts - create with defineServerAuth()')
     if (!clientConfigExists)
-      throw new Error('[nuxt-better-auth] Missing app/auth.client.ts - export createAppAuthClient()')
+      throw new Error('[@onmax/nuxt-better-auth] Missing app/auth.client.ts - export createAppAuthClient()')
 
     // Register #nuxt-better-auth alias for type augmentation
     nuxt.options.alias['#nuxt-better-auth'] = resolver.resolve('./runtime/types/augment')

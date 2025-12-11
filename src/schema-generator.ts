@@ -146,7 +146,7 @@ export async function loadUserAuthConfig(configPath: string): Promise<Partial<Be
     return {}
   }
   catch (error) {
-    console.warn('[nuxt-better-auth] Failed to load auth config for schema generation:', error)
+    console.warn('[@onmax/nuxt-better-auth] Failed to load auth config for schema generation:', error)
     return {}
   }
 }

@@ -1,38 +1,38 @@
-# Nuxt Better Auth
+# @onmax/nuxt-better-auth
 
 [![npm version][npm-version-src]][npm-version-href]
 [![npm downloads][npm-downloads-src]][npm-downloads-href]
 [![License][license-src]][license-href]
 [![Nuxt][nuxt-src]][nuxt-href]
 
-Nuxt module for [Better Auth](https://better-auth.com) integration with [NuxtHub](https://hub.nuxt.com). Provides route protection, session management, and role-based access.
+Nuxt module for [Better Auth](https://better-auth.com) with auto schema generation, route protection, and session management. Works with [NuxtHub](https://hub.nuxt.com) and future `@nuxt/db`.
 
 ## Features
 
-- NuxtHub Integration - Uses `hub:db` for database access
-- Route Protection - Declarative access rules via `routeRules`
-- Session Management - Server and client plugins that sync auth state
-- Role-Based Access - Support for `admin`, `user`, and custom roles
-- Tier Gating - Generic tier system for subscription/premium features
-- Auto-Imports - `useUserSession`, `usePageAccess`, `requireUserSession`, `getUserSession`
+- **Auto Schema Generation** - Generates Drizzle schema from your better-auth plugins
+- **Route Protection** - Declarative access rules via `routeRules`
+- **Session Management** - SSR-safe session handling with client hydration
+- **Role-Based Access** - Support for `admin`, `user`, and custom roles
+- **Auto-Imports** - `useUserSession`, `requireUserSession`, `getUserSession`
+- **BetterAuthState Component** - Ready-to-use Vue component with slots
 
 ## Requirements
 
-- NuxtHub with database enabled (`hub: { database: true }`)
+- NuxtHub with database enabled (`hub: { database: true }`) or future `@nuxt/db`
 
 ## Quick Start
 
 ### 1. Install
 
 ```bash
-pnpm add nuxt-better-auth better-auth drizzle-orm @nuxthub/core
+pnpm add @onmax/nuxt-better-auth better-auth drizzle-orm @nuxthub/core
 ```
 
 ### 2. Configure Nuxt
 
 ```ts
 export default defineNuxtConfig({
-  modules: ['@nuxthub/core', 'nuxt-better-auth'],
+  modules: ['@nuxthub/core', '@onmax/nuxt-better-auth'],
 
   hub: { database: true },
 
@@ -43,7 +43,7 @@ export default defineNuxtConfig({
 
   routeRules: {
     '/app/**': { auth: 'user' },
-    '/admin/**': { auth: 'user', requiresAdmin: true },
+    '/admin/**': { auth: { role: 'admin' } },
     '/login': { auth: 'guest' },
   },
 })
@@ -55,14 +55,16 @@ Create `server/auth.config.ts`:
 
 ```ts
 import { admin } from 'better-auth/plugins'
-import { defineServerAuth } from 'nuxt-better-auth'
+import { defineServerAuth } from '@onmax/nuxt-better-auth'
 
-export default defineServerAuth(({ runtimeConfig, db }) => ({
+export default defineServerAuth(({ db }) => ({
   appName: 'My App',
   plugins: [admin()],
   emailAndPassword: { enabled: true },
 }))
 ```
+
+> Schema is auto-generated from your plugins! No manual Drizzle schema needed.
 
 ### 4. Create Client Config
 
@@ -101,23 +103,34 @@ declare module '#nuxt-better-auth' {
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `auth` | `boolean \| 'guest' \| 'user'` | Auth requirement |
-| `role` | `string \| string[]` | Required role(s) |
-| `requiresAdmin` | `boolean` | Shorthand for `role: 'admin'` |
-| `tier` | `string \| string[]` | Required tier |
+| `auth` | `false \| 'guest' \| 'user' \| { role: string }` | Auth requirement |
+
+Examples:
+- `auth: false` - Public (default)
+- `auth: 'guest'` - Only unauthenticated users
+- `auth: 'user'` - Any authenticated user
+- `auth: { role: 'admin' }` - Requires specific role
 
 ## Composables
 
 ### `useUserSession()`
 
 ```ts
-const { user, session, loggedIn, ready, client, signIn, signUp, signOut, fetchSession, updateUser } = useUserSession()
+const { user, session, loggedIn, ready, client } = useUserSession()
 ```
 
-### `usePageAccess()`
+### `<BetterAuthState>`
 
-```ts
-const { hasAccess, showPaywall, paywallConfig } = usePageAccess()
+```vue
+<BetterAuthState>
+  <template #default="{ loggedIn, user, signOut }">
+    <p v-if="loggedIn">Welcome, {{ user?.name }}</p>
+    <p v-else>Not logged in</p>
+  </template>
+  <template #placeholder>
+    <p>Loading...</p>
+  </template>
+</BetterAuthState>
 ```
 
 ## Server Utils
@@ -154,14 +167,14 @@ pnpm dev
 MIT
 
 <!-- Badges -->
-[npm-version-src]: https://img.shields.io/npm/v/nuxt-better-auth/latest.svg?style=flat&colorA=020420&colorB=00DC82
-[npm-version-href]: https://npmjs.com/package/nuxt-better-auth
+[npm-version-src]: https://img.shields.io/npm/v/@onmax/nuxt-better-auth/latest.svg?style=flat&colorA=020420&colorB=00DC82
+[npm-version-href]: https://npmjs.com/package/@onmax/nuxt-better-auth
 
-[npm-downloads-src]: https://img.shields.io/npm/dm/nuxt-better-auth.svg?style=flat&colorA=020420&colorB=00DC82
-[npm-downloads-href]: https://npm.chart.dev/nuxt-better-auth
+[npm-downloads-src]: https://img.shields.io/npm/dm/@onmax/nuxt-better-auth.svg?style=flat&colorA=020420&colorB=00DC82
+[npm-downloads-href]: https://npm.chart.dev/@onmax/nuxt-better-auth
 
-[license-src]: https://img.shields.io/npm/l/nuxt-better-auth.svg?style=flat&colorA=020420&colorB=00DC82
-[license-href]: https://npmjs.com/package/nuxt-better-auth
+[license-src]: https://img.shields.io/npm/l/@onmax/nuxt-better-auth.svg?style=flat&colorA=020420&colorB=00DC82
+[license-href]: https://npmjs.com/package/@onmax/nuxt-better-auth
 
 [nuxt-src]: https://img.shields.io/badge/Nuxt-020420?logo=nuxt.js
 [nuxt-href]: https://nuxt.com

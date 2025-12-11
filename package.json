@@ -1,10 +1,14 @@
 {
-  "name": "nuxt-better-auth",
+  "name": "@onmax/nuxt-better-auth",
   "type": "module",
   "version": "0.1.0",
   "description": "Nuxt module for Better Auth integration with NuxtHub, route protection, session management, and role-based access",
   "license": "MIT",
-  "repository": "your-org/nuxt-better-auth",
+  "author": "onmax",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/onmax/nuxt-better-auth"
+  },
   "exports": {
     ".": {
       "types": "./dist/types.d.mts",
