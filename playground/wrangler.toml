@@ -1,7 +1,7 @@
 name = "nuxt-better-auth-playground"
 main = ".output/server/index.mjs"
 compatibility_date = "2025-01-01"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = [ "nodejs_compat" ]
 account_id = "ba6e044dfdaaffec3cac45e9feccd237"
 
 [[d1_databases]]
