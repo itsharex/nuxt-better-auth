@@ -1,5 +1,7 @@
 export default defineNuxtConfig({
-  modules: ['@nuxthub/core', '../src/module'],
+  modules: ['@nuxthub/core', '@nuxt/ui', '../src/module'],
+
+  css: ['~/assets/css/main.css'],
 
   hub: { db: 'sqlite' },
 

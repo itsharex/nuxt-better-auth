@@ -8,6 +8,8 @@
     "generate": "nuxi generate"
   },
   "dependencies": {
+    "@nuxt/fonts": "^0.12.1",
+    "@nuxt/ui": "^4.2.1",
     "@nuxthub/core": "^0.10.1",
     "nuxt": "^4.2.2"
   },
