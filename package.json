@@ -83,6 +83,9 @@
       "better-sqlite3",
       "esbuild",
       "@parcel/watcher"
-    ]
+    ],
+    "patchedDependencies": {
+      "@peculiar/x509@1.14.2": "patches/@peculiar__x509@1.14.2.patch"
+    }
   }
 }
