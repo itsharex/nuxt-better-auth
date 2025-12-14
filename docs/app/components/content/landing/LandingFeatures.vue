@@ -25,7 +25,9 @@ const items = features.items as { title: string, description: string, icon: stri
         >
           <div class="flex items-center gap-2 my-1">
             <UIcon :name="feature.icon" class="size-4" />
-            <p class="text-stone-600 dark:text-stone-400">{{ feature.title }}</p>
+            <p class="text-stone-600 dark:text-stone-400">
+              {{ feature.title }}
+            </p>
           </div>
           <div class="mt-2">
             <p class="mt-2 text-sm text-left text-muted">
@@ -44,7 +46,9 @@ const items = features.items as { title: string, description: string, icon: stri
           <div class="flex flex-col items-center justify-center w-full h-full gap-3">
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-globe" class="size-4" />
-              <p class="text-stone-600 dark:text-stone-400">Nuxt + Better Auth</p>
+              <p class="text-stone-600 dark:text-stone-400">
+                Nuxt + Better Auth
+              </p>
             </div>
             <p class="max-w-md mx-auto mt-4 text-4xl font-normal tracking-tighter text-center md:text-4xl">
               <strong>Set up authentication in minutes, not hours!</strong>

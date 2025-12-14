@@ -1,19 +1,20 @@
 import type { NuxtPage } from '@nuxt/schema'
+import type { BetterAuthModuleOptions } from './runtime/config'
 import type { AuthRouteRules } from './runtime/types'
 import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
-import { addComponentsDir, addImportsDir, addPlugin, addServerHandler, addServerImportsDir, addServerScanDir, addTemplate, addTypeTemplate, createResolver, defineNuxtModule } from '@nuxt/kit'
+import { addComponentsDir, addImportsDir, addPlugin, addServerHandler, addServerImportsDir, addServerScanDir, addTemplate, addTypeTemplate, createResolver, defineNuxtModule, updateTemplates } from '@nuxt/kit'
 import { defu } from 'defu'
 import { join } from 'pathe'
 import { createRouter, toRouteMatcher } from 'radix3'
 import { generateDrizzleSchema, loadUserAuthConfig } from './schema-generator'
 
-export interface BetterAuthModuleOptions {}
+export type { BetterAuthModuleOptions } from './runtime/config'
 
 export default defineNuxtModule<BetterAuthModuleOptions>({
   meta: { name: '@onmax/nuxt-better-auth', configKey: 'auth', compatibility: { nuxt: '>=3.0.0' } },
-  defaults: {},
-  async setup(_options, nuxt) {
+  defaults: { redirects: { login: '/login', guest: '/' } },
+  async setup(options, nuxt) {
     const resolver = createResolver(import.meta.url)
 
     // Validate user config files exist
@@ -28,6 +29,15 @@ export default defineNuxtModule<BetterAuthModuleOptions>({
     if (!clientConfigExists)
       throw new Error('[@onmax/nuxt-better-auth] Missing app/auth.client.ts - export createAppAuthClient()')
 
+    // Expose module options to runtime config
+    nuxt.options.runtimeConfig.public = nuxt.options.runtimeConfig.public || {}
+    nuxt.options.runtimeConfig.public.auth = defu(nuxt.options.runtimeConfig.public.auth as Record<string, unknown>, {
+      redirects: {
+        login: options.redirects?.login ?? '/login',
+        guest: options.redirects?.guest ?? '/',
+      },
+    })
+
     // Register #nuxt-better-auth alias for type augmentation
     nuxt.options.alias['#nuxt-better-auth'] = resolver.resolve('./runtime/types/augment')
 
@@ -41,7 +51,24 @@ export default defineNuxtModule<BetterAuthModuleOptions>({
       getContents: () => `
 // Type augmentation support
 export * from '${resolver.resolve('./runtime/types/augment')}'
-export type { AuthMeta, AuthMode, AuthRouteRules, RoleName } from '${resolver.resolve('./runtime/types')}'
+export type { AuthMeta, AuthMode, AuthRouteRules, UserMatch, RequireSessionOptions } from '${resolver.resolve('./runtime/types')}'
+`,
+    })
+
+    // Add type template that infers types from user's auth.config.ts
+    addTypeTemplate({
+      filename: 'types/nuxt-better-auth-infer.d.ts',
+      getContents: () => `
+// Auto-generated types from auth.config.ts
+import type { InferUser, InferSession } from 'better-auth'
+import type configFn from '${serverConfigPath}'
+
+type _Config = ReturnType<typeof configFn>
+
+declare module '#nuxt-better-auth' {
+  interface AuthUser extends InferUser<_Config> {}
+  interface AuthSession { session: InferSession<_Config>['session'], user: InferUser<_Config> }
+}
 `,
     })
 
@@ -53,10 +80,16 @@ export type { AuthMeta, AuthMode, AuthRouteRules, RoleName } from '${resolver.re
 declare module 'nitropack/types' {
   interface NitroRouteRules {
     auth?: import('${resolver.resolve('./runtime/types')}').AuthMeta
-    role?: import('${resolver.resolve('./runtime/types')}').RoleName | import('${resolver.resolve('./runtime/types')}').RoleName[]
   }
 }
 `,
+    })
+
+    // HMR: Watch auth.config.ts for changes and regenerate types
+    nuxt.hook('builder:watch', async (_event, relativePath) => {
+      if (relativePath.includes('auth.config')) {
+        await updateTemplates({ filter: t => t.filename.includes('nuxt-better-auth') })
+      }
     })
 
     // Auto-import server utils (serverAuth, getUserSession, requireUserSession)
@@ -101,12 +134,9 @@ declare module 'nitropack/types' {
 
         const matchedRules = defu({}, ...matches.reverse()) as AuthRouteRules
 
-        if (matchedRules.auth !== undefined || matchedRules.role) {
+        if (matchedRules.auth !== undefined) {
           page.meta = page.meta || {}
-          if (matchedRules.auth !== undefined)
-            page.meta.auth = matchedRules.auth
-          if (matchedRules.role)
-            page.meta.role = matchedRules.role
+          page.meta.auth = matchedRules.auth
         }
 
         page.children?.forEach(child => applyMetaFromRules(child))
@@ -178,4 +208,4 @@ async function setupBetterAuthSchema(nuxt: any, serverConfigPath: string) {
 
 // Re-export config helpers
 export { defineClientAuth, defineServerAuth } from './runtime/config'
-export type { AuthMeta, AuthMode, AuthRouteRules, AuthSession, AuthUser, RoleName } from './runtime/types'
+export type { AuthMeta, AuthMode, AuthRouteRules, AuthSession, AuthUser, RequireSessionOptions, UserMatch } from './runtime/types'

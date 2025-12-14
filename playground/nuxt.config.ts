@@ -5,8 +5,6 @@ export default defineNuxtConfig({
 
   hub: { db: 'sqlite' },
 
-  site: { url: 'https://playground.nuxt-better-auth.onmax.me' },
-
   devtools: { enabled: true },
 
   runtimeConfig: {
@@ -16,10 +14,19 @@ export default defineNuxtConfig({
     },
   },
 
+  auth: {
+    redirects: {
+      login: '/login',
+      guest: '/',
+    },
+  },
+
   routeRules: {
     '/app/**': { auth: 'user' },
-    '/admin/**': { auth: { role: 'admin' } },
+    '/admin/**': { auth: { user: { role: 'admin' } } },
     '/login': { auth: 'guest' },
+    '/register': { auth: 'guest' },
+    '/forget-password': { auth: 'guest' },
   },
 
   compatibilityDate: '2025-01-01',

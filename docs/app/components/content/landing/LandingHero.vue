@@ -7,9 +7,12 @@ const tabs = hero.tabs as { name: string, code: string, lang: string }[]
 
 // Map file extensions to languages
 function getLang(filename: string) {
-  if (filename.endsWith('.ts')) return 'ts'
-  if (filename.endsWith('.vue')) return 'vue'
-  if (filename.endsWith('.js')) return 'js'
+  if (filename.endsWith('.ts'))
+    return 'ts'
+  if (filename.endsWith('.vue'))
+    return 'vue'
+  if (filename.endsWith('.js'))
+    return 'js'
   return 'ts'
 }
 

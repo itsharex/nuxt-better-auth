@@ -1,29 +1,48 @@
 import type { H3Event } from 'h3'
-import type { RoleName } from '../../types'
+import type { AuthSession, AuthUser, RequireSessionOptions, UserMatch } from '../../types'
 import { createError } from '#imports'
 
-type Session = ReturnType<typeof serverAuth>['$Infer']['Session']
+interface FullSession { user: AuthUser, session: AuthSession }
 
-export async function getUserSession(event: H3Event): Promise<Session | null> {
-  const auth = serverAuth()
-  return await auth.api.getSession({ headers: event.headers }) as Session | null
+// Check if user matches all conditions (AND between fields, OR within array values)
+function matchesUser(user: AuthUser, match: UserMatch<AuthUser>): boolean {
+  for (const [key, expected] of Object.entries(match)) {
+    const actual = (user as unknown as Record<string, unknown>)[key]
+    if (Array.isArray(expected)) {
+      if (!expected.includes(actual as never))
+        return false
+    }
+    else {
+      if (actual !== expected)
+        return false
+    }
+  }
+  return true
 }
 
-export async function requireUserSession(event: H3Event, { role }: { role?: RoleName | RoleName[] } = {}): Promise<Session> {
+export async function getUserSession(event: H3Event): Promise<FullSession | null> {
+  const auth = serverAuth()
+  const session = await auth.api.getSession({ headers: event.headers })
+  return session as FullSession | null
+}
+
+export async function requireUserSession(event: H3Event, options?: RequireSessionOptions): Promise<FullSession> {
   const session = await getUserSession(event)
 
   if (!session)
     throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
 
-  const user = session.user as { role?: string, banned?: boolean }
+  // Check user match conditions
+  if (options?.user) {
+    if (!matchesUser(session.user, options.user))
+      throw createError({ statusCode: 403, statusMessage: 'Access denied' })
+  }
 
-  if (user.banned)
-    throw createError({ statusCode: 403, statusMessage: 'Account suspended', data: { banned: true } })
-
-  if (role) {
-    const allowedRoles = Array.isArray(role) ? role : [role]
-    if (!user.role || !allowedRoles.includes(user.role as RoleName))
-      throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
+  // Check custom rule callback
+  if (options?.rule) {
+    const allowed = await options.rule({ user: session.user, session: session.session })
+    if (!allowed)
+      throw createError({ statusCode: 403, statusMessage: 'Access denied' })
   }
 
   return session

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-const route = useRoute()
 const appConfig = useAppConfig()
 const site = useSiteConfig()
 
@@ -7,8 +6,6 @@ const navLinks = [
   { name: 'docs', path: '/getting-started/quickstart' },
   { name: 'better-auth', path: 'https://www.better-auth.com', external: true },
 ]
-
-const isLanding = computed(() => route.path === '/')
 </script>
 
 <template>

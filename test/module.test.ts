@@ -7,15 +7,24 @@ describe('nuxt-better-auth module', async () => {
     rootDir: fileURLToPath(new URL('./fixtures/basic', import.meta.url)),
   })
 
-  it('renders home page with BetterAuthState component', async () => {
-    const html = await $fetch('/')
-    expect(html).toContain('Home')
-    // BetterAuthState shows placeholder during SSR (ready=false)
-    expect(html).toContain('Loading auth...')
+  describe('page rendering', () => {
+    it('renders home page with BetterAuthState component', async () => {
+      const html = await $fetch('/')
+      expect(html).toContain('Home')
+      // BetterAuthState shows placeholder during SSR (ready=false)
+      expect(html).toContain('Loading auth...')
+    })
   })
 
-  it('redirects unauthenticated users from protected routes', async () => {
-    const html = await $fetch('/protected')
-    expect(html).toContain('login') // Should redirect to login
+  describe('route protection', () => {
+    it('redirects unauthenticated users from protected routes', async () => {
+      const html = await $fetch('/protected')
+      expect(html).toContain('login')
+    })
+
+    it('allows access to guest routes when unauthenticated', async () => {
+      const html = await $fetch('/login')
+      expect(html).toContain('Login')
+    })
   })
 })

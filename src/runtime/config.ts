@@ -16,7 +16,20 @@ type ClientAuthConfig = Omit<ClientOptions, 'baseURL'> & { baseURL?: string }
 export type ServerAuthConfigFn = (ctx: ServerAuthContext) => ServerAuthConfig
 export type ClientAuthConfigFn = (ctx: ClientAuthContext) => ClientAuthConfig
 
-export function defineServerAuth(config: ServerAuthConfigFn): ServerAuthConfigFn {
+// Module options for nuxt.config.ts
+export interface BetterAuthModuleOptions {
+  redirects?: {
+    login?: string // default: '/login'
+    guest?: string // default: '/'
+  }
+}
+
+// Runtime config type for public.auth
+export interface AuthRuntimeConfig {
+  redirects: { login: string, guest: string }
+}
+
+export function defineServerAuth<T extends ServerAuthConfig>(config: (ctx: ServerAuthContext) => T): (ctx: ServerAuthContext) => T {
   return config
 }
 

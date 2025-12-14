@@ -8,9 +8,16 @@ export default defineNuxtConfig({
     public: { siteUrl: '' },
   },
 
+  auth: {
+    redirects: {
+      login: '/login',
+      guest: '/',
+    },
+  },
+
   routeRules: {
     '/protected': { auth: 'user' },
-    '/admin': { auth: { role: 'admin' } },
+    '/admin': { auth: { user: { role: 'admin' } } },
     '/login': { auth: 'guest' },
   },
 })

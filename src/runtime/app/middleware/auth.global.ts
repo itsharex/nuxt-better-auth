@@ -1,5 +1,5 @@
-import type { AuthMeta, AuthMode, RoleName } from '../../types'
-import { createError, defineNuxtRouteMiddleware, navigateTo, useRequestHeaders } from '#imports'
+import type { AuthMeta, AuthMode, AuthUser, UserMatch } from '../../types'
+import { createError, defineNuxtRouteMiddleware, navigateTo, useRequestHeaders, useRuntimeConfig } from '#imports'
 
 declare module '#app' {
   interface PageMeta {
@@ -13,6 +13,22 @@ declare module 'vue-router' {
   }
 }
 
+// Check if user matches all conditions (AND between fields, OR within array values)
+function matchesUser(user: AuthUser, match: UserMatch<AuthUser>): boolean {
+  for (const [key, expected] of Object.entries(match)) {
+    const actual = (user as unknown as Record<string, unknown>)[key]
+    if (Array.isArray(expected)) {
+      if (!expected.includes(actual as never))
+        return false
+    }
+    else {
+      if (actual !== expected)
+        return false
+    }
+  }
+  return true
+}
+
 export default defineNuxtRouteMiddleware(async (to) => {
   const auth = to.meta.auth as AuthMeta | undefined
 
@@ -20,6 +36,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   if (auth === undefined || auth === false)
     return
 
+  const config = useRuntimeConfig().public.auth as { redirects: { login: string, guest: string } } | undefined
   const { fetchSession, user, loggedIn, ready } = useUserSession()
 
   // Fetch session if not already loaded
@@ -28,26 +45,23 @@ export default defineNuxtRouteMiddleware(async (to) => {
     await fetchSession({ headers })
   }
 
-  if (loggedIn.value && user.value?.banned)
-    throw createError({ statusCode: 403, statusMessage: 'Account suspended', data: { banned: true } })
-
   const mode: AuthMode = typeof auth === 'string' ? auth : auth?.only ?? 'user'
+  const redirectTo = typeof auth === 'object' ? auth.redirectTo : undefined
 
+  // Guest mode - only allow unauthenticated users
   if (mode === 'guest') {
-    if (loggedIn.value) {
-      const redirectTarget = typeof auth === 'object' && auth.redirectTo ? auth.redirectTo : '/'
-      return navigateTo(redirectTarget)
-    }
+    if (loggedIn.value)
+      return navigateTo(redirectTo ?? config?.redirects?.guest ?? '/')
     return
   }
 
+  // User mode - require authentication
   if (!loggedIn.value)
-    return navigateTo('/login')
+    return navigateTo(redirectTo ?? config?.redirects?.login ?? '/login')
 
-  const requiredRole = typeof auth === 'object' ? auth.role : undefined
-  if (requiredRole) {
-    const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole]
-    if (!user.value || !allowedRoles.includes(user.value.role as RoleName))
+  // Check user match conditions if specified
+  if (typeof auth === 'object' && auth.user) {
+    if (!user.value || !matchesUser(user.value, auth.user))
       throw createError({ statusCode: 403, statusMessage: 'Access denied' })
   }
 })

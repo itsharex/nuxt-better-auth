@@ -1,9 +1,9 @@
-// Base types that users extend via module augmentation
-// Users add fields in: shared/types/auth.d.ts
+// Base types - automatically extended via type generation from auth.config.ts
+// These serve as fallbacks and base structure
 
 import type { ComputedRef, Ref } from 'vue'
 
-// Base user - extend with plugin fields
+// Base user - extended by InferUser<Config> from generated types
 export interface AuthUser {
   id: string
   createdAt: Date
@@ -14,7 +14,7 @@ export interface AuthUser {
   image?: string | null
 }
 
-// Base session
+// Base session - extended by InferSession<Config> from generated types
 export interface AuthSession {
   id: string
   createdAt: Date
@@ -26,7 +26,7 @@ export interface AuthSession {
   userAgent?: string | null
 }
 
-// Composable return type (core fields only - actual composable has more from client)
+// Composable return type
 export interface UserSessionComposable {
   user: Ref<AuthUser | null>
   session: Ref<AuthSession | null>
