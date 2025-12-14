@@ -3,7 +3,7 @@ import type { ClientOptions } from 'better-auth/client'
 
 export interface ServerAuthContext {
   runtimeConfig: any
-  db: any
+  db?: any // optional in database-less mode
 }
 
 export interface ClientAuthContext {

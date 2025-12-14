@@ -29,14 +29,15 @@ export default defineNuxtModule<BetterAuthModuleOptions>({
     if (!clientConfigExists)
       throw new Error('[@onmax/nuxt-better-auth] Missing app/auth.client.ts - export createAppAuthClient()')
 
+    // Detect NuxtHub config
+    const hub = (nuxt.options as unknown as Record<string, unknown>).hub as { db?: boolean | string | object, kv?: boolean } | undefined
+    const hasDb = !!hub?.db
+
     // Validate KV is enabled if secondaryStorage requested
     let secondaryStorageEnabled = options.secondaryStorage ?? false
-    if (secondaryStorageEnabled) {
-      const hub = (nuxt.options as unknown as Record<string, unknown>).hub as { kv?: boolean } | undefined
-      if (!hub?.kv) {
-        console.warn('[nuxt-better-auth] secondaryStorage requires hub.kv: true in nuxt.config.ts. Disabling.')
-        secondaryStorageEnabled = false
-      }
+    if (secondaryStorageEnabled && !hub?.kv) {
+      console.warn('[nuxt-better-auth] secondaryStorage requires hub.kv: true in nuxt.config.ts. Disabling.')
+      secondaryStorageEnabled = false
     }
 
     // Expose module options to runtime config
@@ -49,7 +50,10 @@ export default defineNuxtModule<BetterAuthModuleOptions>({
     })
 
     // Private runtime config (server-only)
-    nuxt.options.runtimeConfig.auth = defu(nuxt.options.runtimeConfig.auth as Record<string, unknown>, { secondaryStorage: secondaryStorageEnabled })
+    nuxt.options.runtimeConfig.auth = defu(nuxt.options.runtimeConfig.auth as Record<string, unknown>, {
+      secondaryStorage: secondaryStorageEnabled,
+      useDatabase: hasDb,
+    })
 
     // Register #nuxt-better-auth alias for type augmentation
     nuxt.options.alias['#nuxt-better-auth'] = resolver.resolve('./runtime/types/augment')
@@ -129,8 +133,10 @@ declare module 'nitropack/types' {
       app.middleware.push({ name: 'auth', path: resolver.resolve('./runtime/app/middleware/auth.global'), global: true })
     })
 
-    // Auto-generate better-auth schema and extend NuxtHub db schema
-    await setupBetterAuthSchema(nuxt, serverConfigPath)
+    // Auto-generate better-auth schema and extend NuxtHub db schema (only if db configured)
+    if (hasDb) {
+      await setupBetterAuthSchema(nuxt, serverConfigPath)
+    }
 
     // Sync routeRules to page meta
     nuxt.hook('pages:extend', (pages) => {
@@ -161,13 +167,7 @@ declare module 'nitropack/types' {
 })
 
 async function setupBetterAuthSchema(nuxt: any, serverConfigPath: string) {
-  // Check if NuxtHub db is enabled
   const hub = nuxt.options.hub as any
-  if (!hub?.db) {
-    console.warn('[nuxt-better-auth] NuxtHub database not configured. Set hub.db in nuxt.config.ts')
-    return
-  }
-
   const dialect = typeof hub.db === 'string' ? hub.db : hub.db?.dialect
   if (!dialect || !['sqlite', 'postgresql', 'mysql'].includes(dialect)) {
     console.warn(`[nuxt-better-auth] Unsupported database dialect: ${dialect}`)

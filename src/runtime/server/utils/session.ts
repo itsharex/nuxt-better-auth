@@ -21,7 +21,7 @@ function matchesUser(user: AuthUser, match: UserMatch<AuthUser>): boolean {
 }
 
 export async function getUserSession(event: H3Event): Promise<FullSession | null> {
-  const auth = serverAuth()
+  const auth = await serverAuth()
   const session = await auth.api.getSession({ headers: event.headers })
   return session as FullSession | null
 }
