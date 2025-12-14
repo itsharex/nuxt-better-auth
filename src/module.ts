@@ -13,7 +13,7 @@ export type { BetterAuthModuleOptions } from './runtime/config'
 
 export default defineNuxtModule<BetterAuthModuleOptions>({
   meta: { name: '@onmax/nuxt-better-auth', configKey: 'auth', compatibility: { nuxt: '>=3.0.0' } },
-  defaults: { redirects: { login: '/login', guest: '/' } },
+  defaults: { redirects: { login: '/login', guest: '/' }, secondaryStorage: false },
   async setup(options, nuxt) {
     const resolver = createResolver(import.meta.url)
 
@@ -29,6 +29,16 @@ export default defineNuxtModule<BetterAuthModuleOptions>({
     if (!clientConfigExists)
       throw new Error('[@onmax/nuxt-better-auth] Missing app/auth.client.ts - export createAppAuthClient()')
 
+    // Validate KV is enabled if secondaryStorage requested
+    let secondaryStorageEnabled = options.secondaryStorage ?? false
+    if (secondaryStorageEnabled) {
+      const hub = nuxt.options.hub as { kv?: boolean } | undefined
+      if (!hub?.kv) {
+        console.warn('[nuxt-better-auth] secondaryStorage requires hub.kv: true in nuxt.config.ts. Disabling.')
+        secondaryStorageEnabled = false
+      }
+    }
+
     // Expose module options to runtime config
     nuxt.options.runtimeConfig.public = nuxt.options.runtimeConfig.public || {}
     nuxt.options.runtimeConfig.public.auth = defu(nuxt.options.runtimeConfig.public.auth as Record<string, unknown>, {
@@ -37,6 +47,9 @@ export default defineNuxtModule<BetterAuthModuleOptions>({
         guest: options.redirects?.guest ?? '/',
       },
     })
+
+    // Private runtime config (server-only)
+    nuxt.options.runtimeConfig.auth = defu(nuxt.options.runtimeConfig.auth as Record<string, unknown>, { secondaryStorage: secondaryStorageEnabled })
 
     // Register #nuxt-better-auth alias for type augmentation
     nuxt.options.alias['#nuxt-better-auth'] = resolver.resolve('./runtime/types/augment')

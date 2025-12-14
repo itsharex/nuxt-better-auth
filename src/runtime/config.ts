@@ -22,11 +22,18 @@ export interface BetterAuthModuleOptions {
     login?: string // default: '/login'
     guest?: string // default: '/'
   }
+  /** Enable KV secondary storage for sessions. Requires hub.kv: true */
+  secondaryStorage?: boolean
 }
 
 // Runtime config type for public.auth
 export interface AuthRuntimeConfig {
   redirects: { login: string, guest: string }
+}
+
+// Private runtime config (server-only)
+export interface AuthPrivateRuntimeConfig {
+  secondaryStorage: boolean
 }
 
 export function defineServerAuth<T extends ServerAuthConfig>(config: (ctx: ServerAuthContext) => T): (ctx: ServerAuthContext) => T {
