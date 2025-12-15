@@ -1,18 +1,43 @@
-import { defineEventHandler } from 'h3'
+import { defineEventHandler, useRuntimeConfig } from 'h3'
 import { serverAuth } from '../../utils/auth'
 
 export default defineEventHandler(async () => {
   try {
     const auth = await serverAuth()
     const options = auth.options
+    const runtimeConfig = useRuntimeConfig()
+    const publicAuth = runtimeConfig.public?.auth as { redirects?: { login?: string, guest?: string } } | undefined
+
+    // Session config with sensible defaults display
+    const sessionConfig = options.session || {}
+    const expiresInDays = sessionConfig.expiresIn ? Math.round(sessionConfig.expiresIn / 86400) : 7
+    const updateAgeDays = sessionConfig.updateAge ? Math.round(sessionConfig.updateAge / 86400) : 1
 
     return {
       config: {
-        baseURL: options.baseURL,
-        basePath: options.basePath || '/api/auth',
-        socialProviders: Object.keys(options.socialProviders || {}),
-        plugins: (options.plugins || []).map((p: any) => p.id || 'unknown'),
-        trustedOrigins: options.trustedOrigins || [],
+        // Server config
+        server: {
+          baseURL: options.baseURL,
+          basePath: options.basePath || '/api/auth',
+          socialProviders: Object.keys(options.socialProviders || {}),
+          plugins: (options.plugins || []).map((p: any) => p.id || 'unknown'),
+          trustedOrigins: options.trustedOrigins || [],
+          session: {
+            expiresIn: `${expiresInDays} days`,
+            updateAge: `${updateAgeDays} days`,
+            cookieCache: sessionConfig.cookieCache?.enabled ?? false,
+          },
+          emailAndPassword: !!options.emailAndPassword,
+          rateLimit: options.rateLimit?.enabled ?? false,
+          advanced: {
+            useSecureCookies: options.advanced?.useSecureCookies ?? 'auto',
+            disableCSRFCheck: options.advanced?.disableCSRFCheck ?? false,
+          },
+        },
+        // Client/module config
+        client: {
+          redirects: publicAuth?.redirects || { login: '/login', guest: '/' },
+        },
       },
     }
   }
