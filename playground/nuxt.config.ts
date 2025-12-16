@@ -34,7 +34,7 @@ export default defineNuxtConfig({
     '/two-factor/otp': { auth: false },
   },
 
-  nitro: { alias: { '@react-email/render': 'unenv/runtime/mock/empty' } },
+  nitro: { virtual: { '#react-email-mock': 'export const render = () => ""' }, alias: { '@react-email/render': '#react-email-mock' } },
 
   compatibilityDate: '2025-01-01',
 })
