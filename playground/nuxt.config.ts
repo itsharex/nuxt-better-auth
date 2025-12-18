@@ -48,7 +48,11 @@ export default defineNuxtConfig({
     '/two-factor/otp': { auth: false },
   },
 
-  nitro: { virtual: { '#react-email-mock': 'export const render = () => ""' }, alias: { '@react-email/render': '#react-email-mock' } },
+  nitro: {
+    virtual: { '#react-email-mock': 'export const render = () => ""' },
+    alias: { '@react-email/render': '#react-email-mock' },
+    cloudflare: { observability: { logs: { enabled: true } } },
+  },
 
   compatibilityDate: '2025-01-01',
 })
