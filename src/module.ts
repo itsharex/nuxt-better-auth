@@ -50,7 +50,7 @@ export default defineNuxtModule<BetterAuthModuleOptions>({
       useDatabase: hasHubDb,
     }) as { redirects: { login: string, guest: string }, useDatabase: boolean }
 
-    nuxt.options.runtimeConfig.betterAuthSecret ??= ''
+    nuxt.options.runtimeConfig.betterAuthSecret ||= process.env.NUXT_BETTER_AUTH_SECRET || ''
     nuxt.options.runtimeConfig.auth = defu(nuxt.options.runtimeConfig.auth as Record<string, unknown>, {
       secondaryStorage: secondaryStorageEnabled,
     }) as { secondaryStorage: boolean }
