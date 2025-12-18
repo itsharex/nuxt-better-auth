@@ -50,11 +50,7 @@ export default defineNuxtModule<BetterAuthModuleOptions>({
       useDatabase: hasHubDb,
     }) as { redirects: { login: string, guest: string }, useDatabase: boolean }
 
-    // server-only - define key for NUXT_BETTER_AUTH_SECRET auto-mapping
-    // Don't set default '' - let Nuxt map from env var at runtime (important for CF Workers)
-    if (nuxt.options.runtimeConfig.betterAuthSecret === undefined) {
-      nuxt.options.runtimeConfig.betterAuthSecret = ''
-    }
+    nuxt.options.runtimeConfig.betterAuthSecret ??= ''
     nuxt.options.runtimeConfig.auth = defu(nuxt.options.runtimeConfig.auth as Record<string, unknown>, {
       secondaryStorage: secondaryStorageEnabled,
     }) as { secondaryStorage: boolean }
