@@ -53,6 +53,7 @@ export default defineNuxtConfig({
     alias: { '@react-email/render': '#react-email-mock' },
     cloudflare: {
       wrangler: {
+        compatibility_flags: ['nodejs_als'],
         observability: { enabled: true, logs: { enabled: true, invocation_logs: true } },
       },
     },
