@@ -31,6 +31,12 @@ describe('nuxt-better-auth module', async () => {
       expect(response.status).toBe(302)
       expect(response.headers.get('location')).toContain('/custom-login')
     })
+
+    it('applies auth from route rules to dynamic catch-all routes', async () => {
+      const response = await fetch(url('/dynamic/protected'), { redirect: 'manual' })
+      expect(response.status).toBe(302)
+      expect(response.headers.get('location')).toContain('/login')
+    })
   })
 
   describe('aPI protection', () => {

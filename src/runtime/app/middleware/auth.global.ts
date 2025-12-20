@@ -1,5 +1,5 @@
-import type { AuthMeta, AuthMode } from '../../types'
-import { createError, defineNuxtRouteMiddleware, navigateTo, useRequestHeaders, useRuntimeConfig } from '#imports'
+import type { AuthMeta, AuthMode, AuthRouteRules } from '../../types'
+import { createError, defineNuxtRouteMiddleware, getRouteRules, navigateTo, useRequestHeaders, useRuntimeConfig } from '#imports'
 import { matchesUser } from '../../utils/match-user'
 
 declare module '#app' {
@@ -15,6 +15,14 @@ declare module 'vue-router' {
 }
 
 export default defineNuxtRouteMiddleware(async (to) => {
+  // Runtime fallback: resolve auth from route rules if not set at build-time
+  // This handles dynamic catch-all routes where build-time can't match specific paths
+  if (to.meta.auth === undefined) {
+    const rules = await getRouteRules({ path: to.path }) as AuthRouteRules
+    if (rules.auth !== undefined)
+      to.meta.auth = rules.auth
+  }
+
   const auth = to.meta.auth as AuthMeta | undefined
 
   if (auth === undefined || auth === false)
