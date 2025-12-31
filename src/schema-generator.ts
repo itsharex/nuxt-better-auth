@@ -1,12 +1,14 @@
 import type { BetterAuthOptions } from 'better-auth'
 import { consola } from 'consola'
 
-interface FieldAttribute { type: string | string[], required?: boolean, unique?: boolean, defaultValue?: any, references?: { model: string, field: string, onDelete?: string }, index?: boolean }
+interface FieldAttribute { type: string | string[], required?: boolean, unique?: boolean, defaultValue?: unknown, references?: { model: string, field: string, onDelete?: string }, index?: boolean }
 interface TableSchema { fields: Record<string, FieldAttribute>, modelName?: string }
 
-export function generateDrizzleSchema(tables: Record<string, TableSchema>, dialect: 'sqlite' | 'postgresql' | 'mysql'): string {
+export function generateDrizzleSchema(tables: Record<string, { fields: Record<string, unknown>, modelName?: string }>, dialect: 'sqlite' | 'postgresql' | 'mysql'): string {
+  // Cast to internal types - better-auth's DBFieldAttribute is compatible
+  const typedTables = tables as Record<string, TableSchema>
   const imports = getImports(dialect)
-  const tableDefinitions = Object.entries(tables).map(([tableName, table]) => generateTable(tableName, table, dialect, tables)).join('\n\n')
+  const tableDefinitions = Object.entries(typedTables).map(([tableName, table]) => generateTable(tableName, table, dialect, typedTables)).join('\n\n')
 
   return `${imports}\n\n${tableDefinitions}\n`
 }
@@ -140,8 +142,8 @@ export async function loadUserAuthConfig(configPath: string, throwOnError = fals
   const jiti = createJiti(import.meta.url, { interopDefault: true })
 
   try {
-    const mod = await jiti.import(configPath) as any
-    const configFn = mod.default || mod
+    const mod = await jiti.import(configPath) as { default?: unknown } | ((...args: unknown[]) => unknown)
+    const configFn = typeof mod === 'object' && mod !== null && 'default' in mod ? mod.default : mod
     if (typeof configFn === 'function') {
       // Call with empty context - we only need plugins, not db
       return configFn({ runtimeConfig: {}, db: null })

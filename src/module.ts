@@ -1,4 +1,4 @@
-import type { NuxtPage } from '@nuxt/schema'
+import type { Nuxt, NuxtPage } from '@nuxt/schema'
 import type { BetterAuthModuleOptions } from './runtime/config'
 import type { AuthRouteRules } from './runtime/types'
 import { existsSync } from 'node:fs'
@@ -12,6 +12,12 @@ import { setupDevTools } from './devtools'
 import { generateDrizzleSchema, loadUserAuthConfig } from './schema-generator'
 
 import './types/hooks'
+
+// NuxtHub module options type
+interface NuxtHubOptions {
+  db?: boolean | string | { dialect?: 'sqlite' | 'postgresql' | 'mysql' }
+  kv?: boolean
+}
 
 const consola = _consola.withTag('nuxt-better-auth')
 
@@ -42,7 +48,7 @@ export default defineNuxtModule<BetterAuthModuleOptions>({
       throw new Error(`[nuxt-better-auth] Missing ${clientConfigFile}.ts - export createAppAuthClient()`)
 
     const hasNuxtHub = hasNuxtModule('@nuxthub/core', nuxt)
-    const hub = hasNuxtHub ? (nuxt.options as unknown as Record<string, unknown>).hub as { db?: boolean | string | object, kv?: boolean } | undefined : undefined
+    const hub = hasNuxtHub ? (nuxt.options as { hub?: NuxtHubOptions }).hub : undefined
     const hasHubDb = hasNuxtHub && !!hub?.db
 
     let secondaryStorageEnabled = options.secondaryStorage ?? false
@@ -63,7 +69,7 @@ export default defineNuxtModule<BetterAuthModuleOptions>({
       throw new Error('[nuxt-better-auth] BETTER_AUTH_SECRET is required in production. Set BETTER_AUTH_SECRET or NUXT_BETTER_AUTH_SECRET environment variable.')
     }
     if (betterAuthSecret && betterAuthSecret.length < 32) {
-      consola.warn('[nuxt-better-auth] BETTER_AUTH_SECRET should be at least 32 characters for security')
+      throw new Error('[nuxt-better-auth] BETTER_AUTH_SECRET must be at least 32 characters for security')
     }
 
     nuxt.options.runtimeConfig.betterAuthSecret = betterAuthSecret
@@ -96,10 +102,12 @@ export function createSecondaryStorage() {
     if (hasHubDb && !hubDbPath) {
       throw new Error('[nuxt-better-auth] hub:db alias not found. Ensure @nuxthub/core is loaded before this module.')
     }
+    // Extract dialect from hub.db config (string or object with dialect property)
+    const hubDialect = typeof hub?.db === 'string' ? hub.db : (typeof hub?.db === 'object' ? hub.db.dialect : undefined) ?? 'sqlite'
     const databaseCode = hasHubDb && hubDbPath
       ? `import { db, schema } from '${hubDbPath}'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
-const rawDialect = '${(hub as any)?.db?.dialect ?? 'sqlite'}'
+const rawDialect = '${hubDialect}'
 const dialect = rawDialect === 'postgresql' ? 'pg' : rawDialect
 export function createDatabase() { return drizzleAdapter(db, { provider: dialect, schema }) }
 export { db }`
@@ -207,7 +215,9 @@ declare module 'nitropack/types' {
       await setupBetterAuthSchema(nuxt, serverConfigPath)
     }
 
-    if (nuxt.options.dev && process.env.NODE_ENV !== 'production') {
+    // Only enable devtools in development - explicit production check
+    const isProduction = process.env.NODE_ENV === 'production' || !nuxt.options.dev
+    if (!isProduction) {
       setupDevTools(nuxt)
       addServerHandler({ route: '/api/_better-auth/config', method: 'get', handler: resolver.resolve('./runtime/server/api/_better-auth/config.get') })
       if (hasHubDb) {
@@ -248,9 +258,9 @@ declare module 'nitropack/types' {
   },
 })
 
-async function setupBetterAuthSchema(nuxt: any, serverConfigPath: string) {
-  const hub = nuxt.options.hub as any
-  const dialect = typeof hub.db === 'string' ? hub.db : hub.db?.dialect
+async function setupBetterAuthSchema(nuxt: Nuxt, serverConfigPath: string) {
+  const hub = (nuxt.options as { hub?: NuxtHubOptions }).hub
+  const dialect = typeof hub?.db === 'string' ? hub.db : (typeof hub?.db === 'object' ? hub.db.dialect : undefined)
   if (!dialect || !['sqlite', 'postgresql', 'mysql'].includes(dialect)) {
     consola.warn(`Unsupported database dialect: ${dialect}`)
     return
@@ -262,7 +272,7 @@ async function setupBetterAuthSchema(nuxt: any, serverConfigPath: string) {
     const configFile = `${serverConfigPath}.ts`
     const userConfig = await loadUserAuthConfig(configFile, isProduction)
 
-    const extendedConfig: { plugins?: any[] } = {}
+    const extendedConfig: { plugins?: unknown[] } = {}
     await nuxt.callHook('better-auth:config:extend', extendedConfig)
 
     const plugins = [...(userConfig.plugins || []), ...(extendedConfig.plugins || [])]
@@ -270,7 +280,7 @@ async function setupBetterAuthSchema(nuxt: any, serverConfigPath: string) {
     const { getAuthTables } = await import('better-auth/db')
     const tables = getAuthTables({ plugins })
 
-    const schemaCode = generateDrizzleSchema(tables, dialect as 'sqlite' | 'postgresql' | 'mysql')
+    const schemaCode = generateDrizzleSchema(tables as unknown as Record<string, { fields: Record<string, unknown>, modelName?: string }>, dialect as 'sqlite' | 'postgresql' | 'mysql')
 
     const schemaDir = join(nuxt.options.buildDir, 'better-auth')
     const schemaPath = join(schemaDir, `schema.${dialect}.ts`)
@@ -289,7 +299,9 @@ async function setupBetterAuthSchema(nuxt: any, serverConfigPath: string) {
     consola.error('Failed to generate schema:', error)
   }
 
-  nuxt.hook('hub:db:schema:extend', ({ paths, dialect: hookDialect }: { paths: string[], dialect: string }) => {
+  // NuxtHub-specific hook for schema extension (not in standard Nuxt types)
+  const nuxtWithHubHooks = nuxt as Nuxt & { hook: (name: string, cb: (arg: { paths: string[], dialect: string }) => void) => void }
+  nuxtWithHubHooks.hook('hub:db:schema:extend', ({ paths, dialect: hookDialect }) => {
     const schemaPath = join(nuxt.options.buildDir, 'better-auth', `schema.${hookDialect}.ts`)
     if (existsSync(schemaPath)) {
       paths.push(schemaPath)
