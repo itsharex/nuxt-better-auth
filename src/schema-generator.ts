@@ -1,5 +1,5 @@
 import type { BetterAuthOptions } from 'better-auth'
-import type { BetterAuthDBSchema, DBFieldAttribute } from 'better-auth/db'
+import type { BetterAuthDBSchema } from 'better-auth/db'
 import { consola } from 'consola'
 import pluralize from 'pluralize'
 
