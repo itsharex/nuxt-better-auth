@@ -1,3 +1,4 @@
+import { getAuthTables } from 'better-auth/db'
 import { describe, expect, it } from 'vitest'
 import { generateDrizzleSchema, generateField } from '../src/schema-generator'
 
@@ -80,5 +81,21 @@ describe('generateDrizzleSchema', () => {
     }
     const result = generateField('updatedAt', field, 'sqlite', {})
     expect(result).toContain('.$onUpdate(')
+  })
+})
+
+describe('getAuthTables with secondaryStorage', () => {
+  it('excludes session table when secondaryStorage is provided', () => {
+    const mockStorage = { get: async () => null, set: async () => {}, delete: async () => {} }
+    const tables = getAuthTables({ secondaryStorage: mockStorage })
+    expect(tables).not.toHaveProperty('session')
+    expect(tables).toHaveProperty('user')
+    expect(tables).toHaveProperty('account')
+  })
+
+  it('includes session table when secondaryStorage is undefined', () => {
+    const tables = getAuthTables({})
+    expect(tables).toHaveProperty('session')
+    expect(tables).toHaveProperty('user')
   })
 })
