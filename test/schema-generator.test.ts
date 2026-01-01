@@ -21,9 +21,23 @@ describe('generateDrizzleSchema', () => {
   })
 
   it('custom modelName takes precedence over usePlural', () => {
+    // Only a DIFFERENT modelName should skip pluralization
     const tables = { user: { modelName: 'custom_user', fields: {} } }
     const schema = generateDrizzleSchema(tables, 'sqlite', { usePlural: true })
     expect(schema).toContain('sqliteTable(\'custom_user\'')
+  })
+
+  it('same modelName as tableName does not skip transformations', () => {
+    // better-auth sets modelName=tableName by default, this should NOT skip transforms
+    const tables = { user: { modelName: 'user', fields: {} } }
+    const schema = generateDrizzleSchema(tables, 'sqlite', { usePlural: true })
+    expect(schema).toContain('sqliteTable(\'users\'')
+  })
+
+  it('usePlural handles words ending in s correctly', () => {
+    const tables = { address: { fields: {} } }
+    const schema = generateDrizzleSchema(tables, 'sqlite', { usePlural: true })
+    expect(schema).toContain('sqliteTable(\'addresses\'')
   })
 
   it('postgresql uses text id by default', () => {
@@ -60,6 +74,47 @@ describe('generateDrizzleSchema', () => {
     }
     const schema = generateDrizzleSchema(tables, 'mysql', { useUuid: true })
     expect(schema).toContain('userId: varchar(\'userId\', { length: 36 })')
+  })
+
+  it('snake_case field names with casing option', () => {
+    const tables = { user: { fields: { emailVerified: { type: 'boolean' }, createdAt: { type: 'date' } } } }
+    const schema = generateDrizzleSchema(tables, 'postgresql', { casing: 'snake_case' })
+    expect(schema).toContain('emailVerified: boolean(\'email_verified\')')
+    expect(schema).toContain('createdAt: timestamp(\'created_at\')')
+  })
+
+  it('snake_case table names with casing option', () => {
+    const tables = { userAccount: { fields: { name: { type: 'string' } } } }
+    const schema = generateDrizzleSchema(tables, 'postgresql', { casing: 'snake_case' })
+    expect(schema).toContain('pgTable(\'user_account\'')
+  })
+
+  it('usePlural + snake_case combines correctly', () => {
+    const tables = { userAccount: { fields: {} } }
+    const schema = generateDrizzleSchema(tables, 'postgresql', { usePlural: true, casing: 'snake_case' })
+    expect(schema).toContain('pgTable(\'user_accounts\'')
+  })
+
+  it('camelCase casing option keeps names unchanged', () => {
+    const tables = { user: { fields: { emailVerified: { type: 'boolean' } } } }
+    const schema = generateDrizzleSchema(tables, 'postgresql', { casing: 'camelCase' })
+    expect(schema).toContain('emailVerified: boolean(\'emailVerified\')')
+  })
+
+  it('fK field names transformed to snake_case', () => {
+    const tables = {
+      user: { fields: { id: { type: 'string' } } },
+      session: { fields: { userId: { type: 'string', references: { model: 'user', field: 'id' } } } },
+    }
+    const schema = generateDrizzleSchema(tables, 'postgresql', { casing: 'snake_case' })
+    expect(schema).toContain('userId: text(\'user_id\')')
+  })
+
+  it('snake_case handles consecutive capitals', () => {
+    const tables = { user: { fields: { userID: { type: 'string' }, oAuth2Token: { type: 'string' } } } }
+    const schema = generateDrizzleSchema(tables, 'postgresql', { casing: 'snake_case' })
+    expect(schema).toContain('userID: text(\'user_id\')')
+    expect(schema).toContain('oAuth2Token: text(\'o_auth2_token\')')
   })
 
   it('generates function defaults with $defaultFn', () => {

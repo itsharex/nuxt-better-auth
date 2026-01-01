@@ -2,6 +2,7 @@ import type { Nuxt, NuxtPage } from '@nuxt/schema'
 import type { BetterAuthPlugin } from 'better-auth'
 import type { BetterAuthModuleOptions } from './runtime/config'
 import type { AuthRouteRules } from './runtime/types'
+import type { CasingOption } from './schema-generator'
 import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { addComponentsDir, addImportsDir, addPlugin, addServerHandler, addServerImportsDir, addServerScanDir, addTemplate, addTypeTemplate, createResolver, defineNuxtModule, extendPages, hasNuxtModule, updateTemplates } from '@nuxt/kit'
@@ -15,9 +16,26 @@ import { generateDrizzleSchema, loadUserAuthConfig } from './schema-generator'
 import './types/hooks'
 
 // NuxtHub module options type
+type DbDialect = 'sqlite' | 'postgresql' | 'mysql'
 interface NuxtHubOptions {
-  db?: boolean | string | { dialect?: 'sqlite' | 'postgresql' | 'mysql' }
+  db?: boolean | DbDialect | { dialect?: DbDialect, casing?: CasingOption }
   kv?: boolean
+}
+
+function getHubDialect(hub?: NuxtHubOptions): DbDialect | undefined {
+  if (!hub?.db)
+    return undefined
+  if (typeof hub.db === 'string')
+    return hub.db
+  if (typeof hub.db === 'object' && hub.db !== null)
+    return hub.db.dialect
+  return undefined
+}
+
+function getHubCasing(hub?: NuxtHubOptions): CasingOption | undefined {
+  if (!hub?.db || typeof hub.db !== 'object' || hub.db === null)
+    return undefined
+  return hub.db.casing
 }
 
 const consola = _consola.withTag('nuxt-better-auth')
@@ -108,8 +126,7 @@ export function createSecondaryStorage() {
     if (hasHubDb && !hubDbPath) {
       throw new Error('[nuxt-better-auth] hub:db alias not found. Ensure @nuxthub/core is loaded before this module.')
     }
-    // Extract dialect from hub.db config (string or object with dialect property)
-    const hubDialect = typeof hub?.db === 'string' ? hub.db : (typeof hub?.db === 'object' ? hub.db.dialect : undefined) ?? 'sqlite'
+    const hubDialect = getHubDialect(hub) ?? 'sqlite'
     const databaseCode = hasHubDb && hubDbPath
       ? `import { db, schema } from '${hubDbPath}'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
@@ -266,7 +283,7 @@ declare module 'nitropack/types' {
 
 async function setupBetterAuthSchema(nuxt: Nuxt, serverConfigPath: string, options: BetterAuthModuleOptions) {
   const hub = (nuxt.options as { hub?: NuxtHubOptions }).hub
-  const dialect = typeof hub?.db === 'string' ? hub.db : (typeof hub?.db === 'object' ? hub.db.dialect : undefined)
+  const dialect = getHubDialect(hub)
   if (!dialect || !['sqlite', 'postgresql', 'mysql'].includes(dialect)) {
     consola.warn(`Unsupported database dialect: ${dialect}`)
     return
@@ -295,10 +312,10 @@ async function setupBetterAuthSchema(nuxt: Nuxt, serverConfigPath: string, optio
         : undefined,
     })
 
-    // Auto-detect UUID mode from auth.config.ts
     const useUuid = userConfig.advanced?.database?.generateId === 'uuid'
-    const schemaOptions = { ...options.schema, useUuid }
-    const schemaCode = generateDrizzleSchema(tables as unknown as Record<string, { fields: Record<string, unknown>, modelName?: string }>, dialect as 'sqlite' | 'postgresql' | 'mysql', schemaOptions)
+    const hubCasing = getHubCasing(hub)
+    const schemaOptions = { ...options.schema, useUuid, casing: options.schema?.casing ?? hubCasing }
+    const schemaCode = generateDrizzleSchema(tables, dialect as 'sqlite' | 'postgresql' | 'mysql', schemaOptions)
 
     const schemaDir = join(nuxt.options.buildDir, 'better-auth')
     const schemaPath = join(schemaDir, `schema.${dialect}.ts`)

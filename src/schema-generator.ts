@@ -1,13 +1,19 @@
 import type { BetterAuthOptions } from 'better-auth'
+import type { BetterAuthDBSchema, DBFieldAttribute } from 'better-auth/db'
 import { consola } from 'consola'
+import pluralize from 'pluralize'
 
 interface FieldAttribute { type: string | string[], required?: boolean, unique?: boolean, defaultValue?: unknown, onUpdate?: (() => unknown), references?: { model: string, field: string, onDelete?: string }, index?: boolean }
 interface TableSchema { fields: Record<string, FieldAttribute>, modelName?: string }
 
-export interface SchemaOptions { usePlural?: boolean, useUuid?: boolean }
+export type CasingOption = 'camelCase' | 'snake_case'
+export interface SchemaOptions { usePlural?: boolean, useUuid?: boolean, casing?: CasingOption }
 
-export function generateDrizzleSchema(tables: Record<string, { fields: Record<string, unknown>, modelName?: string }>, dialect: 'sqlite' | 'postgresql' | 'mysql', options?: SchemaOptions): string {
-  // Cast to internal types - better-auth's DBFieldAttribute is compatible
+function toSnakeCase(str: string): string {
+  return str.replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2').replace(/([a-z\d])([A-Z])/g, '$1_$2').toLowerCase()
+}
+
+export function generateDrizzleSchema(tables: BetterAuthDBSchema, dialect: 'sqlite' | 'postgresql' | 'mysql', options?: SchemaOptions): string {
   const typedTables = tables as Record<string, TableSchema>
   const imports = getImports(dialect, options)
   const tableDefinitions = Object.entries(typedTables).map(([tableName, table]) => generateTable(tableName, table, dialect, typedTables, options)).join('\n\n')
@@ -30,10 +36,12 @@ function getImports(dialect: 'sqlite' | 'postgresql' | 'mysql', options?: Schema
 
 function generateTable(tableName: string, table: TableSchema, dialect: 'sqlite' | 'postgresql' | 'mysql', allTables: Record<string, TableSchema>, options?: SchemaOptions): string {
   const tableFunc = dialect === 'sqlite' ? 'sqliteTable' : dialect === 'postgresql' ? 'pgTable' : 'mysqlTable'
-  let dbTableName = table.modelName || tableName
-  if (options?.usePlural && !table.modelName) {
-    dbTableName = `${tableName}s`
-  }
+  const hasCustomModelName = table.modelName && table.modelName !== tableName
+  let dbTableName = hasCustomModelName ? table.modelName! : tableName
+  if (options?.casing === 'snake_case' && !hasCustomModelName)
+    dbTableName = toSnakeCase(dbTableName)
+  if (options?.usePlural && !hasCustomModelName)
+    dbTableName = pluralize(dbTableName)
   const fields = Object.entries(table.fields).map(([fieldName, field]) => generateField(fieldName, field, dialect, allTables, options)).join(',\n    ')
 
   // Add id field (better-auth expects string ids)
@@ -59,7 +67,7 @@ function generateIdField(dialect: 'sqlite' | 'postgresql' | 'mysql', options?: S
 }
 
 export function generateField(fieldName: string, field: FieldAttribute, dialect: 'sqlite' | 'postgresql' | 'mysql', allTables: Record<string, TableSchema>, options?: SchemaOptions): string {
-  const dbFieldName = fieldName
+  const dbFieldName = options?.casing === 'snake_case' ? toSnakeCase(fieldName) : fieldName
   // Use uuid()/varchar for FK columns referencing id when useUuid is enabled
   const isFkToId = options?.useUuid && field.references?.field === 'id'
   let fieldDef: string
