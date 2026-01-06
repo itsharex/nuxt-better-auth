@@ -44,10 +44,13 @@ export function useSidebarConfig() {
       items: [
         { title: 'Custom Database', href: '/guides/custom-database', icon: 'i-solar-database-bold' },
         { title: 'Database-less Mode', href: '/guides/database-less-mode', icon: 'i-solar-cloud-bold' },
+        { title: 'External Auth Backend', href: '/guides/external-auth-backend', icon: 'i-lucide-server' },
         { title: 'OAuth Providers', href: '/guides/oauth-providers', icon: 'i-solar-user-id-bold' },
         { title: 'Role-Based Access', href: '/guides/role-based-access', icon: 'i-solar-users-group-rounded-bold' },
         { title: 'Two-Factor Auth', href: '/guides/two-factor-auth', icon: 'i-solar-lock-bold' },
         { title: 'Testing', href: '/guides/testing', icon: 'i-solar-test-tube-bold' },
+        { title: 'Migrate from Nuxt Auth Utils', href: '/guides/migrate-from-nuxt-auth-utils', icon: 'i-solar-transfer-horizontal-bold' },
+        { title: 'Production Deployment', href: '/guides/production-deployment', icon: 'i-solar-rocket-bold' },
       ],
     },
     {
