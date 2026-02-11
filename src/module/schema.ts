@@ -2,13 +2,13 @@ import type { Nuxt } from '@nuxt/schema'
 import type { BetterAuthPlugin } from 'better-auth'
 import type { ConsolaInstance } from 'consola'
 import type { BetterAuthModuleOptions } from '../runtime/config'
-import type { NuxtHubOptions } from './backend'
+import type { NuxtHubOptions } from './hub'
 import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { addTemplate } from '@nuxt/kit'
 import { join } from 'pathe'
 import { generateConvexSchema, generateDrizzleSchema, loadUserAuthConfig } from '../schema-generator'
-import { getHubCasing, getHubDialect } from './backend'
+import { getHubCasing, getHubDialect } from './hub'
 
 interface SchemaContext {
   nuxt: Nuxt

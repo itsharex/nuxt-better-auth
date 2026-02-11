@@ -1,6 +1,6 @@
 import type { Nuxt } from '@nuxt/schema'
 import type { DatabaseProvider } from '../database-provider'
-import type { DbDialect } from './backend'
+import type { DbDialect } from './hub'
 import { defu } from 'defu'
 
 export function buildSecondaryStorageCode(enabled: boolean): string {
