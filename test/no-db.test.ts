@@ -16,4 +16,10 @@ describe('no-db mode (NuxtHub without database)', async () => {
     const response = await $fetch('/api/auth/ok')
     expect(response).toBeDefined()
   })
+
+  it('exposes runtime database metadata as none', async () => {
+    const response = await $fetch('/api/test/config') as { useDatabase: boolean, databaseProvider: string }
+    expect(response.useDatabase).toBe(false)
+    expect(response.databaseProvider).toBe('none')
+  })
 })

@@ -71,17 +71,16 @@ export async function setupBetterAuthSchema(
 
     const nuxtWithHubHooks = nuxt as Nuxt & { hook: (name: string, cb: (arg: { paths: string[], dialect: string }) => void) => void }
     nuxtWithHubHooks.hook('hub:db:schema:extend', ({ paths, dialect: hookDialect }) => {
-      const preferTs = nuxt.options.dev
-      const primaryPath = join(nuxt.options.buildDir, 'better-auth', `schema.${hookDialect}.${preferTs ? 'ts' : 'mjs'}`)
-      const fallbackPath = join(nuxt.options.buildDir, 'better-auth', `schema.${hookDialect}.${preferTs ? 'mjs' : 'ts'}`)
+      const tsPath = join(nuxt.options.buildDir, 'better-auth', `schema.${hookDialect}.ts`)
+      const mjsPath = join(nuxt.options.buildDir, 'better-auth', `schema.${hookDialect}.mjs`)
 
-      if (existsSync(primaryPath)) {
-        paths.unshift(primaryPath)
+      if (existsSync(tsPath)) {
+        paths.unshift(tsPath)
         return
       }
 
-      if (existsSync(fallbackPath))
-        paths.unshift(fallbackPath)
+      if (existsSync(mjsPath))
+        paths.unshift(mjsPath)
     })
   }
   catch (error) {

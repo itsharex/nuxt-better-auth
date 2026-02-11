@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
     const auth = serverAuth(event)
     const options = auth.options
     const runtimeConfig = useRuntimeConfig()
-    const publicAuth = runtimeConfig.public?.auth as { redirects?: { login?: string, guest?: string }, useDatabase?: boolean } | undefined
+    const publicAuth = runtimeConfig.public?.auth as { redirects?: { login?: string, guest?: string }, useDatabase?: boolean, databaseProvider?: 'none' | 'nuxthub' | 'convex' } | undefined
     const privateAuth = runtimeConfig.auth as { secondaryStorage?: boolean } | undefined
 
     // Session config with sensible defaults display
@@ -22,6 +22,7 @@ export default defineEventHandler(async (event) => {
           redirects: publicAuth?.redirects || { login: '/login', guest: '/' },
           secondaryStorage: privateAuth?.secondaryStorage ?? false,
           useDatabase: publicAuth?.useDatabase ?? false,
+          databaseProvider: publicAuth?.databaseProvider ?? 'none',
         },
         // Server config (server/auth.config.ts)
         server: {
