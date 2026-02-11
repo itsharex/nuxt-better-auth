@@ -411,8 +411,8 @@ function getAccountActions(row: AccountRow) {
                   <span class="config-label">Guest</span><span class="font-mono">{{ configData.config.module?.redirects?.guest }}</span>
                 </div>
                 <div class="config-row">
-                  <span class="config-label">DB</span><UBadge :color="configData.config.module?.useDatabase ? 'success' : 'neutral'" variant="subtle" size="sm">
-                    {{ configData.config.module?.useDatabase ? 'Hub' : 'Off' }}
+                  <span class="config-label">DB</span><UBadge :color="configData.config.module?.databaseProvider === 'none' ? 'neutral' : 'success'" variant="subtle" size="sm">
+                    {{ configData.config.module?.databaseProvider === 'nuxthub' ? 'Hub' : configData.config.module?.databaseProvider === 'convex' ? 'Convex' : 'Off' }}
                   </UBadge>
                 </div>
                 <div class="config-row">

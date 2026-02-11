@@ -116,10 +116,11 @@ export async function generateConvexSchema(authOptions: BetterAuthOptions): Prom
 
   let code = `/**
  * Auto-generated Better Auth tables for Convex.
+ * Generated at: .nuxt/better-auth/auth-tables.convex.ts
  * Import these tables in your convex/schema.ts:
  *
  * import { defineSchema } from 'convex/server'
- * import { authTables } from './_generated/auth-tables'
+ * import { authTables } from './path-to-auth-tables.convex'
  *
  * export default defineSchema({ ...authTables, ...yourTables })
  */

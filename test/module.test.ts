@@ -13,6 +13,12 @@ describe('nuxt-better-auth module', async () => {
       expect(html).toContain('Home')
       expect(html).toContain('Not logged in')
     })
+
+    it('exposes runtime database metadata as nuxthub', async () => {
+      const response = await $fetch('/api/test/config') as { useDatabase: boolean, databaseProvider: string }
+      expect(response.useDatabase).toBe(true)
+      expect(response.databaseProvider).toBe('nuxthub')
+    })
   })
 
   describe('route protection', () => {
