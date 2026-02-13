@@ -15,6 +15,31 @@ interface SchemaContext {
   serverConfigPath: string
 }
 
+function isInsideNodeModules(path: string): boolean {
+  return path.split(/[\\/]/).includes('node_modules')
+}
+
+export function resolveHubSchemaPath(
+  buildDir: string,
+  rootDir: string,
+  dialect: string,
+  exists: (path: string) => boolean = existsSync,
+): string | null {
+  const rootTsPath = join(rootDir, '.nuxt', 'better-auth', `schema.${dialect}.ts`)
+  if (isInsideNodeModules(buildDir) && exists(rootTsPath))
+    return rootTsPath
+
+  const tsPath = join(buildDir, 'better-auth', `schema.${dialect}.ts`)
+  if (exists(tsPath))
+    return tsPath
+
+  const mjsPath = join(buildDir, 'better-auth', `schema.${dialect}.mjs`)
+  if (exists(mjsPath))
+    return mjsPath
+
+  return null
+}
+
 async function loadAuthOptions(context: SchemaContext) {
   const isProduction = !context.nuxt.options.dev
   const configFile = `${context.serverConfigPath}.ts`
@@ -64,6 +89,13 @@ export async function setupBetterAuthSchema(
     await writeFile(schemaPathTs, schemaCode)
     await writeFile(schemaPathMjs, schemaCode)
 
+    if (isInsideNodeModules(nuxt.options.buildDir)) {
+      const rootSchemaDir = join(nuxt.options.rootDir, '.nuxt', 'better-auth')
+      const rootSchemaPathTs = join(rootSchemaDir, `schema.${dialect}.ts`)
+      await mkdir(rootSchemaDir, { recursive: true })
+      await writeFile(rootSchemaPathTs, schemaCode)
+    }
+
     addTemplate({ filename: `better-auth/schema.${dialect}.ts`, getContents: () => schemaCode, write: true })
     addTemplate({ filename: `better-auth/schema.${dialect}.mjs`, getContents: () => schemaCode, write: true })
 
@@ -71,16 +103,9 @@ export async function setupBetterAuthSchema(
 
     const nuxtWithHubHooks = nuxt as Nuxt & { hook: (name: string, cb: (arg: { paths: string[], dialect: string }) => void) => void }
     nuxtWithHubHooks.hook('hub:db:schema:extend', ({ paths, dialect: hookDialect }) => {
-      const tsPath = join(nuxt.options.buildDir, 'better-auth', `schema.${hookDialect}.ts`)
-      const mjsPath = join(nuxt.options.buildDir, 'better-auth', `schema.${hookDialect}.mjs`)
-
-      if (existsSync(tsPath)) {
-        paths.unshift(tsPath)
-        return
-      }
-
-      if (existsSync(mjsPath))
-        paths.unshift(mjsPath)
+      const schemaPath = resolveHubSchemaPath(nuxt.options.buildDir, nuxt.options.rootDir, hookDialect)
+      if (schemaPath)
+        paths.unshift(schemaPath)
     })
   }
   catch (error) {
