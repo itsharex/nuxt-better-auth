@@ -1,24 +1,72 @@
-import type { AuthSession, AuthUser } from '#nuxt-better-auth'
+import type { AppSession, RequireSessionOptions } from '#nuxt-better-auth'
 import type { H3Event } from 'h3'
-import type { UserMatch } from '../../types'
 import { createError } from 'h3'
 import { matchesUser } from '../../utils/match-user'
 import { serverAuth } from './auth'
 
-interface FullSession { user: AuthUser, session: AuthSession }
-interface RequireUserSessionOptions {
-  user?: UserMatch<AuthUser>
-  rule?: (ctx: { user: AuthUser, session: AuthSession }) => boolean | Promise<boolean>
+const appSessionLoadKey = Symbol.for('nuxt-better-auth.appSessionLoad')
+
+interface AppSessionContext {
+  appSession?: AppSession | null
+  [appSessionLoadKey]?: Promise<AppSession | null>
 }
 
-export async function getUserSession(event: H3Event): Promise<FullSession | null> {
+const fallbackAppSessionContext = new WeakMap<object, AppSessionContext>()
+
+function getAppSessionContext(event: H3Event): AppSessionContext {
+  const eventWithContext = event as H3Event & { context?: unknown }
+  if (eventWithContext.context && typeof eventWithContext.context === 'object')
+    return eventWithContext.context as AppSessionContext
+
+  let context = fallbackAppSessionContext.get(event as object)
+  if (!context) {
+    context = {}
+    fallbackAppSessionContext.set(event as object, context)
+  }
+  return context
+}
+
+export async function getAppSession(event: H3Event): Promise<AppSession | null> {
+  const context = getAppSessionContext(event)
+  if (context.appSession !== undefined)
+    return context.appSession
+
+  if (context[appSessionLoadKey])
+    return context[appSessionLoadKey]
+
+  const load = (async () => {
+    const auth = serverAuth(event)
+    const session = await auth.api.getSession({ headers: event.headers })
+    return session as AppSession | null
+  })()
+
+  context[appSessionLoadKey] = load
+  try {
+    const session = await load
+    context.appSession = session
+    return session
+  }
+  finally {
+    delete context[appSessionLoadKey]
+  }
+}
+
+export async function getUserSession(event: H3Event): Promise<AppSession | null> {
+  // Preserve historical behavior: don't memoize, but reuse request cache if present.
+  const context = getAppSessionContext(event)
+  if (context.appSession !== undefined)
+    return context.appSession
+
+  if (context[appSessionLoadKey])
+    return context[appSessionLoadKey]
+
   const auth = serverAuth(event)
   const session = await auth.api.getSession({ headers: event.headers })
-  return session as FullSession | null
+  return session as AppSession | null
 }
 
-export async function requireUserSession(event: H3Event, options?: RequireUserSessionOptions): Promise<FullSession> {
-  const session = await getUserSession(event)
+export async function requireUserSession(event: H3Event, options?: RequireSessionOptions): Promise<AppSession> {
+  const session = await getAppSession(event)
 
   if (!session)
     throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
