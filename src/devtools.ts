@@ -1,8 +1,18 @@
-import type { ModuleCustomTab } from '@nuxt/devtools-kit/types'
-import type { Nuxt } from 'nuxt/schema'
+import type { Nuxt } from '@nuxt/schema'
+
+interface DevtoolsCustomTab {
+  category: string
+  name: string
+  title: string
+  icon: string
+  view: { type: 'iframe', src: string }
+}
 
 export function setupDevTools(nuxt: Nuxt) {
-  nuxt.hook('devtools:customTabs' as any, (tabs: ModuleCustomTab[]) => {
+  type HookableNuxt = Nuxt & { hook: (name: 'devtools:customTabs', cb: (tabs: DevtoolsCustomTab[]) => void) => void }
+
+  const hookable = nuxt as HookableNuxt
+  hookable.hook('devtools:customTabs', (tabs) => {
     tabs.push({
       category: 'server',
       name: 'better-auth',
