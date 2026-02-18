@@ -77,3 +77,119 @@ describe('setupRuntimeConfig siteUrl hydration', () => {
     expect(consola.warn).toHaveBeenCalledWith('clientOnly mode: set runtimeConfig.public.siteUrl (or NUXT_PUBLIC_SITE_URL) to your frontend URL')
   })
 })
+
+describe('setupRuntimeConfig hubSecondaryStorage validation', () => {
+  it('throws when hubSecondaryStorage enabled in clientOnly mode', () => {
+    const nuxt = createNuxtWithRuntimeConfig()
+    const consola = createConsolaMock()
+
+    expect(() => setupRuntimeConfig({
+      nuxt,
+      options: { hubSecondaryStorage: true },
+      clientOnly: true,
+      databaseProvider: 'none',
+      hasNuxtHub: true,
+      hub: { kv: true },
+      consola,
+    })).toThrow('hubSecondaryStorage is not available in clientOnly mode')
+  })
+
+  it('throws when hubSecondaryStorage: "custom" in clientOnly mode', () => {
+    const nuxt = createNuxtWithRuntimeConfig()
+    const consola = createConsolaMock()
+
+    expect(() => setupRuntimeConfig({
+      nuxt,
+      options: { hubSecondaryStorage: 'custom' },
+      clientOnly: true,
+      databaseProvider: 'none',
+      hasNuxtHub: false,
+      consola,
+    })).toThrow('hubSecondaryStorage is not available in clientOnly mode')
+  })
+
+  it('throws when hubSecondaryStorage: true without NuxtHub', () => {
+    const nuxt = createNuxtWithRuntimeConfig()
+    const consola = createConsolaMock()
+
+    expect(() => setupRuntimeConfig({
+      nuxt,
+      options: { hubSecondaryStorage: true },
+      clientOnly: false,
+      databaseProvider: 'nuxthub',
+      hasNuxtHub: false,
+      consola,
+    })).toThrow('hubSecondaryStorage: true requires @nuxthub/core with hub.kv: true')
+  })
+
+  it('throws when hubSecondaryStorage: true without hub.kv', () => {
+    const nuxt = createNuxtWithRuntimeConfig()
+    const consola = createConsolaMock()
+
+    expect(() => setupRuntimeConfig({
+      nuxt,
+      options: { hubSecondaryStorage: true },
+      clientOnly: false,
+      databaseProvider: 'nuxthub',
+      hasNuxtHub: true,
+      hub: { kv: false },
+      consola,
+    })).toThrow('hubSecondaryStorage: true requires @nuxthub/core with hub.kv: true')
+  })
+
+  it('returns useHubKV true and secondaryStorageEnabled true when hub KV configured', () => {
+    const nuxt = createNuxtWithRuntimeConfig()
+    ;(nuxt.options as any).runtimeConfig.betterAuthSecret = 'a]3kf9$mP!xR7vL2nQ8wE5tY0uI4oH6j'
+    const consola = createConsolaMock()
+
+    const { useHubKV, secondaryStorageEnabled } = setupRuntimeConfig({
+      nuxt,
+      options: { hubSecondaryStorage: true },
+      clientOnly: false,
+      databaseProvider: 'nuxthub',
+      hasNuxtHub: true,
+      hub: { kv: true },
+      consola,
+    })
+
+    expect(useHubKV).toBe(true)
+    expect(secondaryStorageEnabled).toBe(true)
+  })
+
+  it('returns useHubKV false and secondaryStorageEnabled true for "custom" mode', () => {
+    const nuxt = createNuxtWithRuntimeConfig()
+    ;(nuxt.options as any).runtimeConfig.betterAuthSecret = 'a]3kf9$mP!xR7vL2nQ8wE5tY0uI4oH6j'
+    const consola = createConsolaMock()
+
+    const { useHubKV, secondaryStorageEnabled } = setupRuntimeConfig({
+      nuxt,
+      options: { hubSecondaryStorage: 'custom' },
+      clientOnly: false,
+      databaseProvider: 'nuxthub',
+      hasNuxtHub: true,
+      hub: { kv: true },
+      consola,
+    })
+
+    expect(useHubKV).toBe(false)
+    expect(secondaryStorageEnabled).toBe(true)
+  })
+
+  it('does not require hub.kv for "custom" mode', () => {
+    const nuxt = createNuxtWithRuntimeConfig()
+    ;(nuxt.options as any).runtimeConfig.betterAuthSecret = 'a]3kf9$mP!xR7vL2nQ8wE5tY0uI4oH6j'
+    const consola = createConsolaMock()
+
+    const { useHubKV, secondaryStorageEnabled } = setupRuntimeConfig({
+      nuxt,
+      options: { hubSecondaryStorage: 'custom' },
+      clientOnly: false,
+      databaseProvider: 'none',
+      hasNuxtHub: false,
+      consola,
+    })
+
+    expect(useHubKV).toBe(false)
+    expect(secondaryStorageEnabled).toBe(true)
+  })
+})

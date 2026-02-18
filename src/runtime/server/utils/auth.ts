@@ -7,11 +7,13 @@ import { betterAuth } from 'better-auth'
 import { getRequestHost, getRequestProtocol } from 'h3'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import { withoutProtocol } from 'ufo'
+import { resolveCustomSecondaryStorageRequirement } from './custom-secondary-storage'
 
 type AuthInstance = Auth<ReturnType<typeof createServerAuth>>
 
 const _authCache = new Map<string, AuthInstance>()
 let _baseURLInferenceLogged = false
+let _customSecondaryStorageMisconfigWarned = false
 
 function normalizeLoopbackOrigin(origin: string): string {
   if (!import.meta.dev)
@@ -255,10 +257,19 @@ export function serverAuth(event?: H3Event): AuthInstance {
   const userConfig = createServerAuth({ runtimeConfig, db })
   const trustedOrigins = withDevTrustedOrigins(userConfig.trustedOrigins, Boolean(hasExplicitSiteUrl))
 
+  const hubSecondaryStorage = (runtimeConfig.auth as { hubSecondaryStorage?: boolean | 'custom' })?.hubSecondaryStorage
+  const customSecondaryStorage = resolveCustomSecondaryStorageRequirement(hubSecondaryStorage, userConfig.secondaryStorage != null, Boolean(import.meta.dev))
+  if (customSecondaryStorage?.shouldThrow)
+    throw new Error(customSecondaryStorage.message)
+  if (customSecondaryStorage?.shouldWarn && !_customSecondaryStorageMisconfigWarned) {
+    _customSecondaryStorageMisconfigWarned = true
+    console.warn(customSecondaryStorage.message)
+  }
+
   const auth = betterAuth({
     ...userConfig,
     ...(database && { database }),
-    secondaryStorage: createSecondaryStorage(),
+    ...(hubSecondaryStorage === true && { secondaryStorage: createSecondaryStorage() }),
     secret: runtimeConfig.betterAuthSecret,
     baseURL: siteUrl,
     trustedOrigins,
