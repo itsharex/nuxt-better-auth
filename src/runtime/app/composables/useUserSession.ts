@@ -1,11 +1,12 @@
 import type { AppAuthClient, AuthSession, AuthUser } from '#nuxt-better-auth'
 import type { ComputedRef, Ref } from 'vue'
 import createAppAuthClient from '#auth/client'
-import { computed, navigateTo, nextTick, useNuxtApp, useRequestHeaders, useRequestURL, useRuntimeConfig, useState, watch } from '#imports'
+import { computed, navigateTo, nextTick, useNuxtApp, useRequestFetch, useRequestHeaders, useRequestURL, useRuntimeConfig, useState, watch } from '#imports'
 import { normalizeAuthActionError } from '../internal/auth-action-error'
 
 export interface SignOutOptions { onSuccess?: () => void | Promise<void> }
 interface RuntimeFlags { client: boolean, server: boolean }
+interface SessionResponse { session: AuthSession & { token?: string }, user: AuthUser }
 
 let _sessionSignalListenerBound = false
 
@@ -70,6 +71,7 @@ export function useUserSession(): UseUserSessionReturn {
   const runtimeFlags = getRuntimeFlags()
   const runtimeConfig = useRuntimeConfig()
   const requestURL = useRequestURL()
+  const nuxtApp = useNuxtApp()
 
   // Client only - create better-auth client for client-side operations (singleton)
   const client: AppAuthClient | null = runtimeFlags.client
@@ -80,10 +82,10 @@ export function useUserSession(): UseUserSessionReturn {
   const session = useState<AuthSession | null>('auth:session', () => null)
   const user = useState<AuthUser | null>('auth:user', () => null)
   const authReady = useState('auth:ready', () => false)
+  const hydrationReconcileQueued = useState('auth:hydration-reconcile-queued', () => false)
   const ready = computed(() => authReady.value)
   const loggedIn = computed(() => Boolean(session.value && user.value))
 
-  const nuxtApp = useNuxtApp()
   const skipHydratedSsrGetSession = computed(() => {
     const authConfig = runtimeConfig.public.auth as { session?: { skipHydratedSsrGetSession?: boolean } } | undefined
     return Boolean(authConfig?.session?.skipHydratedSsrGetSession)
@@ -155,10 +157,28 @@ export function useUserSession(): UseUserSessionReturn {
           session.value = safeSession as AuthSession
           user.value = newSession.data.user as AuthUser
         }
-        else if (!newSession?.isPending) {
+        else if (!newSession?.isPending && !newSession?.isRefetching) {
+          const isHydrationEmptySnapshot
+            = nuxtApp.isHydrating
+              && nuxtApp.payload.serverRendered
+              && Boolean(session.value && user.value)
+              && !newSession?.data?.session
+              && !newSession?.data?.user
+
+          if (isHydrationEmptySnapshot) {
+            if (!hydrationReconcileQueued.value) {
+              hydrationReconcileQueued.value = true
+              nuxtApp.hook('app:mounted', async () => {
+                await fetchSession({ force: true })
+                hydrationReconcileQueued.value = false
+              })
+            }
+            return
+          }
+
           clearSession()
         }
-        if (!authReady.value && !newSession?.isPending)
+        if (!authReady.value && !newSession?.isPending && !newSession?.isRefetching)
           authReady.value = true
       },
       { immediate: true, deep: true },
@@ -335,10 +355,28 @@ export function useUserSession(): UseUserSessionReturn {
       })
 
   async function fetchSession(options: { headers?: HeadersInit, force?: boolean } = {}) {
-    // On server, session is already fetched by server middleware - nothing to do
     if (runtimeFlags.server) {
-      if (!authReady.value)
-        authReady.value = true
+      try {
+        const headers = options.headers || useRequestHeaders(['cookie'])
+        const requestFetch = useRequestFetch()
+        const data = await requestFetch<SessionResponse | null>('/api/auth/get-session', { headers })
+
+        if (data?.session && data?.user) {
+          const { token: _, ...safeSession } = data.session
+          session.value = safeSession as AuthSession
+          user.value = data.user
+        }
+        else {
+          clearSession()
+        }
+      }
+      catch {
+        clearSession()
+      }
+      finally {
+        if (!authReady.value)
+          authReady.value = true
+      }
       return
     }
 
@@ -348,7 +386,7 @@ export function useUserSession(): UseUserSessionReturn {
         const fetchOptions = headers ? { headers } : undefined
         const query = options.force ? { disableCookieCache: true } : undefined
         const result = await client.getSession({ query }, fetchOptions)
-        const data = result.data as { session: AuthSession & { token?: string }, user: AuthUser } | null
+        const data = result.data as SessionResponse | null
 
         if (data?.session && data?.user) {
           // Filter out sensitive token field

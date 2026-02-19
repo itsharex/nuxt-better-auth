@@ -33,6 +33,17 @@ const requestURL: { origin: string, searchParams: URLSearchParams } = {
 let requestHeaders: HeadersInit | undefined = { cookie: 'session=test' }
 const state = new Map<string, ReturnType<typeof ref>>()
 const navigateTo = vi.fn(async () => {})
+const $fetch = vi.fn(async () => null)
+const nuxtHooks = new Map<string, Array<() => void | Promise<void>>>()
+const nuxtApp = {
+  payload,
+  isHydrating: false,
+  hook: vi.fn((name: string, cb: () => void | Promise<void>) => {
+    const hooks = nuxtHooks.get(name) || []
+    hooks.push(cb)
+    nuxtHooks.set(name, hooks)
+  }),
+}
 
 const sessionAtom = ref<SessionState>({
   data: null,
@@ -63,7 +74,8 @@ vi.mock('#imports', async () => {
     navigateTo,
     nextTick: vue.nextTick,
     watch: vue.watch,
-    useNuxtApp: () => ({ payload }),
+    useNuxtApp: () => nuxtApp,
+    useRequestFetch: () => $fetch,
     useRequestHeaders: () => requestHeaders,
     useRequestURL: () => requestURL,
     useRuntimeConfig: () => runtimeConfig,
@@ -86,6 +98,17 @@ async function loadUseUserSession() {
   return mod.useUserSession
 }
 
+async function flushPromises() {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
+async function triggerNuxtHook(name: string) {
+  const hooks = nuxtHooks.get(name) || []
+  for (const hook of hooks)
+    await hook()
+}
+
 function seedHydratedState() {
   state.set('auth:session', ref({ id: 'session-1' }))
   state.set('auth:user', ref({ id: 'user-1' }))
@@ -95,6 +118,9 @@ function seedHydratedState() {
 describe('useUserSession hydration bootstrap', () => {
   beforeEach(() => {
     state.clear()
+    nuxtHooks.clear()
+    nuxtApp.hook.mockClear()
+    nuxtApp.isHydrating = false
     payload.serverRendered = false
     payload.prerenderedAt = undefined
     payload.isCached = false
@@ -105,6 +131,8 @@ describe('useUserSession hydration bootstrap', () => {
     runtimeConfig.public.auth.session.skipHydratedSsrGetSession = false
     runtimeConfig.public.auth.redirects = {}
     navigateTo.mockClear()
+    $fetch.mockReset()
+    $fetch.mockResolvedValue(null)
 
     sessionAtom.value = {
       data: null,
@@ -200,6 +228,80 @@ describe('useUserSession hydration bootstrap', () => {
     expect(mockClient.useSession).toHaveBeenCalledOnce()
   })
 
+  it('reconciles hydrated SSR auth state before clearing it', async () => {
+    payload.serverRendered = true
+    nuxtApp.isHydrating = true
+    seedHydratedState()
+
+    mockClient.getSession.mockResolvedValueOnce({
+      data: {
+        session: { id: 'session-2', token: 'secret', ipAddress: '127.0.0.1' },
+        user: { id: 'user-2', email: 'user2@example.com' },
+      },
+    })
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+    await flushPromises()
+
+    expect(mockClient.getSession).not.toHaveBeenCalled()
+    expect(auth.session.value).toEqual({ id: 'session-1' })
+    expect(auth.user.value).toEqual({ id: 'user-1' })
+
+    nuxtApp.isHydrating = false
+    await triggerNuxtHook('app:mounted')
+    await flushPromises()
+
+    expect(mockClient.getSession).toHaveBeenCalledTimes(1)
+    expect(auth.session.value).toEqual({ id: 'session-2', ipAddress: '127.0.0.1' })
+    expect(auth.user.value).toEqual({ id: 'user-2', email: 'user2@example.com' })
+  })
+
+  it('clears hydrated SSR auth state when reconciliation confirms no session', async () => {
+    payload.serverRendered = true
+    nuxtApp.isHydrating = true
+    seedHydratedState()
+    mockClient.getSession.mockResolvedValueOnce({ data: null })
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+    await flushPromises()
+
+    expect(mockClient.getSession).not.toHaveBeenCalled()
+    nuxtApp.isHydrating = false
+    await triggerNuxtHook('app:mounted')
+    await flushPromises()
+
+    expect(mockClient.getSession).toHaveBeenCalledTimes(1)
+    expect(auth.session.value).toBeNull()
+    expect(auth.user.value).toBeNull()
+  })
+
+  it('does not run hydration reconciliation when SSR state is not hydrated', async () => {
+    payload.serverRendered = true
+    nuxtApp.isHydrating = true
+
+    const useUserSession = await loadUseUserSession()
+    useUserSession()
+    await flushPromises()
+
+    expect(mockClient.getSession).not.toHaveBeenCalled()
+    expect(nuxtHooks.get('app:mounted')).toBeUndefined()
+  })
+
+  it('queues hydration reconciliation once across composable calls', async () => {
+    payload.serverRendered = true
+    nuxtApp.isHydrating = true
+    seedHydratedState()
+
+    const useUserSession = await loadUseUserSession()
+    useUserSession()
+    useUserSession()
+    await flushPromises()
+
+    expect((nuxtHooks.get('app:mounted') || [])).toHaveLength(1)
+  })
+
   it('fetchSession still calls getSession and updates state', async () => {
     mockClient.getSession.mockResolvedValueOnce({
       data: {
@@ -215,6 +317,37 @@ describe('useUserSession hydration bootstrap', () => {
     expect(mockClient.getSession).toHaveBeenCalledOnce()
     expect(auth.session.value).toEqual({ id: 'session-2', ipAddress: '127.0.0.1' })
     expect(auth.user.value).toEqual({ id: 'user-2', email: 'user@example.com' })
+  })
+
+  it('fetchSession fetches and sets SSR session on server', async () => {
+    setRuntimeFlags({ client: false, server: true })
+    $fetch.mockResolvedValueOnce({
+      session: { id: 'session-server', token: 'secret', ipAddress: '127.0.0.1' },
+      user: { id: 'user-server', email: 'server@example.com' },
+    })
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+    await auth.fetchSession()
+
+    expect($fetch).toHaveBeenCalledWith('/api/auth/get-session', { headers: { cookie: 'session=test' } })
+    expect(auth.session.value).toEqual({ id: 'session-server', ipAddress: '127.0.0.1' })
+    expect(auth.user.value).toEqual({ id: 'user-server', email: 'server@example.com' })
+    expect(auth.ready.value).toBe(true)
+  })
+
+  it('fetchSession clears SSR state on server when no session is returned', async () => {
+    setRuntimeFlags({ client: false, server: true })
+    seedHydratedState()
+    $fetch.mockResolvedValueOnce(null)
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+    await auth.fetchSession()
+
+    expect(auth.session.value).toBeNull()
+    expect(auth.user.value).toBeNull()
+    expect(auth.ready.value).toBe(true)
   })
 
   it('signIn uses auth.redirects.authenticated when no callback is provided', async () => {
