@@ -294,6 +294,77 @@ describe('useUserSession hydration bootstrap', () => {
     expect(navigateTo).not.toHaveBeenCalled()
   })
 
+  it('signIn.social does not inject fallback onSuccess callbacks', async () => {
+    runtimeConfig.public.auth.redirects = { authenticated: '/app' }
+    mockClient.signIn.social.mockResolvedValueOnce({ url: 'https://github.com/login/oauth/authorize', redirect: true })
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+
+    await auth.signIn.social({ provider: 'github' } as never)
+
+    expect(mockClient.signIn.social).toHaveBeenCalledWith({ provider: 'github' }, undefined)
+    expect(mockClient.getSession).not.toHaveBeenCalled()
+    expect(navigateTo).not.toHaveBeenCalled()
+  })
+
+  it('signIn.social preserves explicit onSuccess without wrapping session sync', async () => {
+    const onSuccess = vi.fn()
+    mockClient.signIn.social.mockImplementation(async (_data, opts) => {
+      await opts?.onSuccess?.('ctx')
+    })
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+
+    await auth.signIn.social({ provider: 'github' } as never, { onSuccess } as never)
+
+    expect(onSuccess).toHaveBeenCalledOnce()
+    expect(mockClient.getSession).not.toHaveBeenCalled()
+  })
+
+  it('signIn.social with disableRedirect wraps explicit onSuccess with session sync', async () => {
+    const onSuccess = vi.fn()
+    mockClient.getSession.mockResolvedValueOnce({
+      data: {
+        session: { id: 'session-1', ipAddress: '127.0.0.1' },
+        user: { id: 'user-1', email: 'user@example.com' },
+      },
+    })
+    mockClient.signIn.social.mockImplementation(async (_data, opts) => {
+      await opts?.onSuccess?.('ctx')
+    })
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+
+    await auth.signIn.social({ provider: 'github', disableRedirect: true } as never, { onSuccess } as never)
+
+    expect(mockClient.getSession).toHaveBeenCalledBefore(onSuccess)
+    expect(onSuccess).toHaveBeenCalledOnce()
+  })
+
+  it('signIn.social with disableRedirect uses fallback redirect when callback is missing', async () => {
+    runtimeConfig.public.auth.redirects = { authenticated: '/app' }
+    mockClient.getSession.mockResolvedValueOnce({
+      data: {
+        session: { id: 'session-1', ipAddress: '127.0.0.1' },
+        user: { id: 'user-1', email: 'user@example.com' },
+      },
+    })
+    mockClient.signIn.social.mockImplementation(async (_data, opts) => {
+      await opts?.onSuccess?.('ctx')
+    })
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+
+    await auth.signIn.social({ provider: 'github', disableRedirect: true } as never)
+
+    expect(mockClient.getSession).toHaveBeenCalledOnce()
+    expect(navigateTo).toHaveBeenCalledWith('/app')
+  })
+
   it('signUp does not auto-navigate to authenticated redirect when session is unresolved', async () => {
     runtimeConfig.public.auth.redirects = { authenticated: '/app' }
     mockClient.getSession.mockResolvedValueOnce({ data: null })
