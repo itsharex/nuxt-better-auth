@@ -26,7 +26,10 @@ const runtimeConfig = {
   },
 }
 
-const requestURL = { origin: 'http://localhost:3000' }
+const requestURL: { origin: string, searchParams: URLSearchParams } = {
+  origin: 'http://localhost:3000',
+  searchParams: new URLSearchParams(),
+}
 let requestHeaders: HeadersInit | undefined = { cookie: 'session=test' }
 const state = new Map<string, ReturnType<typeof ref>>()
 const navigateTo = vi.fn(async () => {})
@@ -96,6 +99,7 @@ describe('useUserSession hydration bootstrap', () => {
     payload.prerenderedAt = undefined
     payload.isCached = false
     requestHeaders = { cookie: 'session=test' }
+    requestURL.searchParams = new URLSearchParams()
     requestURL.origin = 'http://localhost:3000'
     runtimeConfig.public.siteUrl = 'http://localhost:3000'
     runtimeConfig.public.auth.session.skipHydratedSsrGetSession = false
@@ -109,14 +113,18 @@ describe('useUserSession hydration bootstrap', () => {
       error: null,
     }
 
-    mockClient.useSession.mockClear()
-    mockClient.getSession.mockClear()
+    mockClient.useSession.mockReset()
+    mockClient.useSession.mockImplementation(() => sessionAtom)
+    mockClient.getSession.mockReset()
     mockClient.$store.listen.mockClear()
     mockClient.signOut.mockClear()
     mockClient.updateUser = undefined
-    mockClient.signIn.social.mockClear()
-    mockClient.signIn.email.mockClear()
-    mockClient.signUp.email.mockClear()
+    mockClient.signIn.social.mockReset()
+    mockClient.signIn.social.mockResolvedValue({})
+    mockClient.signIn.email.mockReset()
+    mockClient.signIn.email.mockResolvedValue({})
+    mockClient.signUp.email.mockReset()
+    mockClient.signUp.email.mockResolvedValue({})
     mockClient.getSession.mockResolvedValue({ data: null })
 
     setRuntimeFlags({ client: true, server: false })
@@ -207,6 +215,137 @@ describe('useUserSession hydration bootstrap', () => {
     expect(mockClient.getSession).toHaveBeenCalledOnce()
     expect(auth.session.value).toEqual({ id: 'session-2', ipAddress: '127.0.0.1' })
     expect(auth.user.value).toEqual({ id: 'user-2', email: 'user@example.com' })
+  })
+
+  it('signIn uses auth.redirects.authenticated when no callback is provided', async () => {
+    runtimeConfig.public.auth.redirects = { authenticated: '/app' }
+    mockClient.getSession.mockResolvedValueOnce({
+      data: {
+        session: { id: 'session-1', ipAddress: '127.0.0.1' },
+        user: { id: 'user-1', email: 'user@example.com' },
+      },
+    })
+    mockClient.signIn.email.mockImplementation(async (_data, opts) => {
+      await opts?.onSuccess?.('ctx')
+    })
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+
+    await auth.signIn.email({ email: 'user@example.com', password: 'password' })
+    expect(navigateTo).toHaveBeenCalledWith('/app')
+  })
+
+  it('signIn prioritizes redirect query over auth.redirects.authenticated', async () => {
+    runtimeConfig.public.auth.redirects = { authenticated: '/app' }
+    requestURL.searchParams = new URLSearchParams({ redirect: '/app/billing' })
+    mockClient.getSession.mockResolvedValueOnce({
+      data: {
+        session: { id: 'session-1', ipAddress: '127.0.0.1' },
+        user: { id: 'user-1', email: 'user@example.com' },
+      },
+    })
+    mockClient.signIn.email.mockImplementation(async (_data, opts) => {
+      await opts?.onSuccess?.('ctx')
+    })
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+
+    await auth.signIn.email({ email: 'user@example.com', password: 'password' })
+    expect(navigateTo).toHaveBeenCalledWith('/app/billing')
+  })
+
+  it('signIn ignores unsafe redirect query and uses auth.redirects.authenticated', async () => {
+    runtimeConfig.public.auth.redirects = { authenticated: '/app' }
+    requestURL.searchParams = new URLSearchParams({ redirect: 'https://evil.com/phish' })
+    mockClient.getSession.mockResolvedValueOnce({
+      data: {
+        session: { id: 'session-1', ipAddress: '127.0.0.1' },
+        user: { id: 'user-1', email: 'user@example.com' },
+      },
+    })
+    mockClient.signIn.email.mockImplementation(async (_data, opts) => {
+      await opts?.onSuccess?.('ctx')
+    })
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+
+    await auth.signIn.email({ email: 'user@example.com', password: 'password' })
+    expect(navigateTo).toHaveBeenCalledWith('/app')
+  })
+
+  it('signIn does not auto-navigate when no onSuccess callback and no fallback redirect is set', async () => {
+    mockClient.getSession.mockResolvedValueOnce({
+      data: {
+        session: { id: 'session-1', ipAddress: '127.0.0.1' },
+        user: { id: 'user-1', email: 'user@example.com' },
+      },
+    })
+    mockClient.signIn.email.mockImplementation(async (_data, opts) => {
+      await opts?.onSuccess?.('ctx')
+    })
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+
+    await auth.signIn.email({ email: 'user@example.com', password: 'password' })
+    expect(navigateTo).not.toHaveBeenCalled()
+  })
+
+  it('signUp does not auto-navigate to authenticated redirect when session is unresolved', async () => {
+    runtimeConfig.public.auth.redirects = { authenticated: '/app' }
+    mockClient.getSession.mockResolvedValueOnce({ data: null })
+    mockClient.signUp.email.mockImplementation(async (_data, opts) => {
+      await opts?.onSuccess?.('ctx')
+    })
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+
+    await auth.signUp.email({ email: 'user@example.com', password: 'password', name: 'User' })
+
+    expect(navigateTo).not.toHaveBeenCalled()
+  }, 10000)
+
+  it('signUp uses auth.redirects.authenticated when no callback is provided', async () => {
+    runtimeConfig.public.auth.redirects = { authenticated: '/app' }
+    mockClient.getSession.mockResolvedValueOnce({
+      data: {
+        session: { id: 'session-1', ipAddress: '127.0.0.1' },
+        user: { id: 'user-1', email: 'user@example.com' },
+      },
+    })
+    mockClient.signUp.email.mockImplementation(async (_data, opts) => {
+      await opts?.onSuccess?.('ctx')
+    })
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+
+    await auth.signUp.email({ email: 'user@example.com', password: 'password', name: 'User' })
+    expect(navigateTo).toHaveBeenCalledWith('/app')
+  })
+
+  it('signUp prioritizes redirect query over auth.redirects.authenticated', async () => {
+    runtimeConfig.public.auth.redirects = { authenticated: '/app' }
+    requestURL.searchParams = new URLSearchParams({ redirect: '/welcome' })
+    mockClient.getSession.mockResolvedValueOnce({
+      data: {
+        session: { id: 'session-1', ipAddress: '127.0.0.1' },
+        user: { id: 'user-1', email: 'user@example.com' },
+      },
+    })
+    mockClient.signUp.email.mockImplementation(async (_data, opts) => {
+      await opts?.onSuccess?.('ctx')
+    })
+
+    const useUserSession = await loadUseUserSession()
+    const auth = useUserSession()
+
+    await auth.signUp.email({ email: 'user@example.com', password: 'password', name: 'User' })
+    expect(navigateTo).toHaveBeenCalledWith('/welcome')
   })
 
   it('updateUser persists on client and updates local state optimistically', async () => {
