@@ -27,13 +27,13 @@ vi.mock('#imports', async () => {
   }
 })
 
-async function loadUseUserSignIn() {
+async function loadUseSignIn() {
   vi.resetModules()
-  const mod = await import('../src/runtime/app/composables/useUserSignIn')
-  return mod.useUserSignIn
+  const mod = await import('../src/runtime/app/composables/useSignIn')
+  return mod.useSignIn
 }
 
-describe('useUserSignIn', () => {
+describe('useSignIn', () => {
   it('sets success state, data and clears error on success', async () => {
     const d = deferred<{ ok: true }>()
     sessionMock = {
@@ -42,8 +42,8 @@ describe('useUserSignIn', () => {
       },
     }
 
-    const useUserSignIn = await loadUseUserSignIn()
-    const signInEmail = useUserSignIn('email')
+    const useSignIn = await loadUseSignIn()
+    const signInEmail = useSignIn('email')
 
     const p = signInEmail.execute({} as any)
     expect(signInEmail.status.value).toBe('pending')
@@ -71,8 +71,8 @@ describe('useUserSignIn', () => {
       },
     }
 
-    const useUserSignIn = await loadUseUserSignIn()
-    const signInEmail = useUserSignIn('email')
+    const useSignIn = await loadUseSignIn()
+    const signInEmail = useSignIn('email')
 
     const p1 = signInEmail.execute({} as any)
     d1.resolve({ ok: true })
@@ -98,8 +98,8 @@ describe('useUserSignIn', () => {
       },
     }
 
-    const useUserSignIn = await loadUseUserSignIn()
-    const signInEmail = useUserSignIn('email')
+    const useSignIn = await loadUseSignIn()
+    const signInEmail = useSignIn('email')
 
     await expect(signInEmail.execute({} as any)).resolves.toBeUndefined()
     expect(signInEmail.status.value).toBe('error')
@@ -117,8 +117,8 @@ describe('useUserSignIn', () => {
       },
     }
 
-    const useUserSignIn = await loadUseUserSignIn()
-    const signInEmail = useUserSignIn('email')
+    const useSignIn = await loadUseSignIn()
+    const signInEmail = useSignIn('email')
 
     await expect(signInEmail.execute({} as any)).resolves.toBeUndefined()
     expect(signInEmail.status.value).toBe('error')
@@ -145,8 +145,8 @@ describe('useUserSignIn', () => {
       },
     }
 
-    const useUserSignIn = await loadUseUserSignIn()
-    const signInEmail = useUserSignIn('email')
+    const useSignIn = await loadUseSignIn()
+    const signInEmail = useSignIn('email')
 
     const p1 = signInEmail.execute({} as any)
     const p2 = signInEmail.execute({} as any)
@@ -173,8 +173,8 @@ describe('useUserSignIn', () => {
       }),
     }
 
-    const useUserSignIn = await loadUseUserSignIn()
-    const signInEmail = useUserSignIn('email')
+    const useSignIn = await loadUseSignIn()
+    const signInEmail = useSignIn('email')
 
     expect(signInEmail.status.value).toBe('idle')
     await expect(signInEmail.execute({} as any)).resolves.toBeUndefined()
@@ -192,8 +192,8 @@ describe('useUserSignIn', () => {
       },
     }
 
-    const useUserSignIn = await loadUseUserSignIn()
-    const signInEmail = useUserSignIn('email')
+    const useSignIn = await loadUseSignIn()
+    const signInEmail = useSignIn('email')
     const isPending = () => signInEmail.status.value === 'pending'
 
     expect(typeof signInEmail.execute).toBe('function')
@@ -204,11 +204,79 @@ describe('useUserSignIn', () => {
     expect(signInEmail.error.value?.message).toBeUndefined()
   })
 
+  it('routes provider aliases to signIn.social and injects provider', async () => {
+    sessionMock = {
+      signIn: {
+        social: vi.fn(async () => ({ ok: true })),
+      },
+    }
+
+    const useSignIn = await loadUseSignIn()
+    const signInGithub = useSignIn('github' as any)
+
+    await signInGithub.execute({ callbackURL: '/app' } as any)
+    expect(sessionMock.signIn.social).toHaveBeenCalledWith({ provider: 'github', callbackURL: '/app' })
+    expect(signInGithub.status.value).toBe('success')
+  })
+
+  it('injects provider when alias execute is called without payload', async () => {
+    const onSuccess = vi.fn()
+    sessionMock = {
+      signIn: {
+        social: vi.fn(async () => ({ ok: true })),
+      },
+    }
+
+    const useSignIn = await loadUseSignIn()
+    const signInGithub = useSignIn('github' as any)
+
+    await signInGithub.execute(undefined as any, { onSuccess } as any)
+    expect(sessionMock.signIn.social).toHaveBeenCalledWith({ provider: 'github' }, { onSuccess })
+  })
+
+  it('keeps alias provider when payload includes provider', async () => {
+    sessionMock = {
+      signIn: {
+        social: vi.fn(async () => ({ ok: true })),
+      },
+    }
+
+    const useSignIn = await loadUseSignIn()
+    const signInGithub = useSignIn('github' as any)
+
+    await signInGithub.execute({ provider: 'google', callbackURL: '/app' } as any)
+    expect(sessionMock.signIn.social).toHaveBeenCalledWith({ provider: 'github', callbackURL: '/app' })
+  })
+
+  it('keeps provider alias handles independent', async () => {
+    const d = deferred<{ ok: true }>()
+    let calls = 0
+    sessionMock = {
+      signIn: {
+        social: vi.fn(() => {
+          calls++
+          return calls === 1 ? d.promise : Promise.resolve({ ok: true })
+        }),
+      },
+    }
+
+    const useSignIn = await loadUseSignIn()
+    const signInGithub = useSignIn('github' as any)
+    const signInGoogle = useSignIn('google' as any)
+
+    const p = signInGithub.execute({} as any)
+    expect(signInGithub.status.value).toBe('pending')
+    expect(signInGoogle.status.value).toBe('idle')
+
+    d.resolve({ ok: true })
+    await p
+  })
+
   it('throws when method key is missing', async () => {
     sessionMock = { signIn: {} }
-    const useUserSignIn = await loadUseUserSignIn()
-    expect(() => useUserSignIn(undefined as any)).toThrowError(TypeError)
-    expect(() => useUserSignIn(undefined as any)).toThrow('requires a sign-in method key')
+    const useSignIn = await loadUseSignIn()
+    expect(() => useSignIn(undefined as any)).toThrowError(TypeError)
+    expect(() => useSignIn(undefined as any)).toThrow('requires a sign-in method key')
   })
 
   it('sets error state for invalid method key', async () => {
@@ -218,8 +286,8 @@ describe('useUserSignIn', () => {
       },
     }
 
-    const useUserSignIn = await loadUseUserSignIn()
-    const invalid = useUserSignIn('invalid' as any)
+    const useSignIn = await loadUseSignIn()
+    const invalid = useSignIn('invalid' as any)
 
     await expect(invalid.execute({} as any)).resolves.toBeUndefined()
     expect(invalid.status.value).toBe('error')
